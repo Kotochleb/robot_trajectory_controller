@@ -8,7 +8,7 @@ pkg_check_modules(Ipopt REQUIRED ipopt)
 
 include_directories(include)
 
-add_executable(inverted_pendulum src/main.cpp src/MyNLP.cpp)
+add_executable(inverted_pendulum src/main.cpp src/pendulum.cpp)
 target_link_libraries(inverted_pendulum PRIVATE ${Ipopt_LIBRARIES})
 target_include_directories(inverted_pendulum PUBLIC ${Ipopt_INCLUDE_DIRS})
 target_compile_options(inverted_pendulum PUBLIC ${Ipopt_CFLAGS_OTHER})

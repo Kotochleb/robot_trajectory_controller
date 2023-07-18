@@ -6,7 +6,7 @@
 
 #include "IpIpoptApplication.hpp"
 #include "IpSolveStatistics.hpp"
-#include "MyNLP.hpp"
+#include "pendulum.hpp"
 
 #include <iostream>
 

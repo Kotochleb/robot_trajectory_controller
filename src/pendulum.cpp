@@ -4,7 +4,7 @@
 //
 // Authors:  Carl Laird, Andreas Waechter     IBM    2004-11-05
 
-#include "MyNLP.hpp"
+#include "pendulum.hpp"
 
 #include <cassert>
 

@@ -1,4 +1,4 @@
-# magisterka
+# Thesis
 
 Install dependencies
 ```bash
