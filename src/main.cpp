@@ -1,53 +1,49 @@
-// Copyright (C) 2004, 2009 International Business Machines and others.
-// All Rights Reserved.
-// This code is published under the Eclipse Public License.
-//
-// Authors:  Carl Laird, Andreas Waechter     IBM    2004-11-05
-
 #include "IpIpoptApplication.hpp"
 #include "IpSolveStatistics.hpp"
 #include "pendulum.hpp"
 
+#include <sciplot/sciplot.hpp>
+
+#include <cmath>
 #include <iostream>
 
-using namespace Ipopt;
+int main(int argc, char* argv[]) {
+  Ipopt::SmartPtr<Ipopt::TNLP> inverted_pendulum = new InvertedPendulum();
+  Ipopt::SmartPtr<Ipopt::IpoptApplication> app = IpoptApplicationFactory();
+  auto status = app->Initialize();
 
-int main(int, char**) {
-  // Create an instance of your nlp...
-  SmartPtr<TNLP> mynlp = new MyNLP();
-
-  // Create an instance of the IpoptApplication
-  //
-  // We are using the factory, since this allows us to compile this
-  // example with an Ipopt Windows DLL
-  SmartPtr<IpoptApplication> app = IpoptApplicationFactory();
-
-  // Initialize the IpoptApplication and process the options
-  ApplicationReturnStatus status;
-  status = app->Initialize();
-  if (status != Solve_Succeeded) {
+  if (status != Ipopt::Solve_Succeeded) {
     std::cout << std::endl
               << std::endl
               << "*** Error during initialization!" << std::endl;
-    return (int)status;
+    return static_cast<int>(status);
   }
 
-  status = app->OptimizeTNLP(mynlp);
+  status = app->OptimizeTNLP(inverted_pendulum);
 
-  if (status == Solve_Succeeded) {
-    // Retrieve some statistics about the solve
-    Index iter_count = app->Statistics()->IterationCount();
+  if (status == Ipopt::Solve_Succeeded) {
+    Ipopt::Index iter_count = app->Statistics()->IterationCount();
     std::cout << std::endl
               << std::endl
               << "*** The problem solved in " << iter_count << " iterations!"
               << std::endl;
 
-    Number final_obj = app->Statistics()->FinalObjective();
+    Ipopt::Number final_obj = app->Statistics()->FinalObjective();
     std::cout << std::endl
               << std::endl
               << "*** The final value of the objective function is "
               << final_obj << '.' << std::endl;
   }
 
-  return (int)status;
+  // sciplot::Plot2D plot;
+  // plot.xlabel("x");
+
+  // sciplot::Vec x = sciplot::linspace(0.0, M_PI, 200);
+  // plot.drawCurve(x, std::sin(1.0 * x)).label("sin(x)");
+
+  // sciplot::Figure fig = {{plot}};
+  // sciplot::Canvas canvas = {{fig}};
+  // canvas.show();
+
+  return static_cast<int>(status);
 }

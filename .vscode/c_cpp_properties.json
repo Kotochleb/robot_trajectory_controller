@@ -4,12 +4,14 @@
             "name": "Linux",
             "includePath": [
                 "include",
-                "/usr/include/**"
+                "/usr/include/**",
+                "build/_deps/**"
             ],
             "browse": {
                 "path": [
                     "${workspaceFolder}",
-                    "/usr/include"
+                    "/usr/include",
+                    "build/_deps/**"
                 ]
             },
             "defines": [],
