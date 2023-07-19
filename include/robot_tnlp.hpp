@@ -1,13 +1,15 @@
-#ifndef __INVERTED_PENDULUM_HPP__
-#define __INVERTED_PENDULUM_HPP__
+#ifndef __ROBOT_TNLP_HPP__
+#define __ROBOT_TNLP_HPP__
 
 #include "IpTNLP.hpp"
 
-class InvertedPendulum : public Ipopt::TNLP {
- public:
-  InvertedPendulum();
+namespace robot_tnlp {
 
-  virtual ~InvertedPendulum();
+class RobotTNLP : public Ipopt::TNLP {
+ public:
+  RobotTNLP();
+
+  virtual ~RobotTNLP();
 
   virtual bool get_nlp_info(Ipopt::Index& n, Ipopt::Index& m,
                             Ipopt::Index& nnz_jac_g, Ipopt::Index& nnz_h_lag,
@@ -50,8 +52,9 @@ class InvertedPendulum : public Ipopt::TNLP {
       Ipopt::IpoptCalculatedQuantities* ip_cq);
 
  private:
-  InvertedPendulum(const InvertedPendulum&);
-  InvertedPendulum& operator=(const InvertedPendulum&);
+  RobotTNLP(const RobotTNLP&);
+  RobotTNLP& operator=(const RobotTNLP&);
 };
+};  // namespace robot_tnlp
 
-#endif  // __INVERTED_PENDULUM_HPP__
+#endif  // __ROBOT_TNLP_HPP__

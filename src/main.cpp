@@ -1,6 +1,6 @@
 #include "IpIpoptApplication.hpp"
 #include "IpSolveStatistics.hpp"
-#include "pendulum.hpp"
+#include "robot_tnlp.hpp"
 
 #include <sciplot/sciplot.hpp>
 
@@ -8,7 +8,7 @@
 #include <iostream>
 
 int main(int argc, char* argv[]) {
-  Ipopt::SmartPtr<Ipopt::TNLP> inverted_pendulum = new InvertedPendulum();
+  Ipopt::SmartPtr<Ipopt::TNLP> inverted_pendulum = new RobotTNLP();
   Ipopt::SmartPtr<Ipopt::IpoptApplication> app = IpoptApplicationFactory();
   auto status = app->Initialize();
 
