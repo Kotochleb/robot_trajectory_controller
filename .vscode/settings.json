@@ -47,6 +47,10 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp",
         "bit": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "dense": "cpp",
+        "valarray": "cpp",
+        "regex": "cpp",
+        "unordered_set": "cpp"
     }
 }
