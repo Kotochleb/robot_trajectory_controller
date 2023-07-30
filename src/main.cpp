@@ -2,13 +2,12 @@
 // #include "IpSolveStatistics.hpp"
 // #include "robot_tnlp.hpp"
 
-#include <matplot/matplot.h>
-
 #include <cmath>
 #include <iostream>
 #include <vector>
 
 #include <robot_dynamics.hpp>
+#include <robot_state_plotter.hpp>
 
 #include <Eigen/Dense>
 
@@ -46,23 +45,19 @@ int main(int argc, char* argv[]) {
 
   auto rd = robot_dynamics::RobotDynamics(1.0f, 1.0f);
 
-  const size_t N = 1000;
+  const size_t N = 100;
   robot_dynamics::MatrixState<N> x_out = robot_dynamics::MatrixState<N>::Zero();
   robot_dynamics::MatrixControl<N> u =
-      robot_dynamics::MatrixControl<N>::Constant(1.0f);
+      robot_dynamics::MatrixControl<N>::Zero();
   robot_dynamics::Vector5f x0 = robot_dynamics::Vector5f::Zero();
 
-  u.row(0).setLinSpaced(N, 1.0, -1.0);
-  u.row(1).setLinSpaced(N, 0, 1);
+  u.block<2, 10>(0, 0).setConstant(1.0f);
 
   rd.simulate<N>(u, x0, x_out);
 
-  // std::cout << x_out.format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]"));
+  auto rsp = robot_state_plotter::RobotStatePlotter(0.1);
 
-  // std::cout << x_out.row(1).format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]"));
+  // rsp.print_matrix(u);
+  rsp.plot<N>(u, x_out);
 
-  const auto x = std::vector<float>(x_out.row(1).begin(), x_out.row(1).end());
-  const auto y = std::vector<float>(x_out.row(2).begin(), x_out.row(2).end());
-  plt::plot(x, y);
-  plt::show();
 }

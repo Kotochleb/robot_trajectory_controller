@@ -29,7 +29,7 @@ FetchContent_MakeAvailable(Eigen)
 
 include_directories(include)
 
-add_executable(robot_controller src/main.cpp src/robot_dynamics.cpp)
+add_executable(robot_controller src/main.cpp)
 target_link_libraries(robot_controller INTERFACE ${Ipopt_LIBRARIES} PUBLIC Eigen3::Eigen matplot)
 target_include_directories(robot_controller PUBLIC ${Ipopt_INCLUDE_DIRS})
 target_compile_options(robot_controller PUBLIC ${Ipopt_CFLAGS_OTHER})
