@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-#include <robot_dynamics.hpp>
+#include <diff_drive_dynamics.hpp>
 #include <robot_state_plotter.hpp>
 
 #include <Eigen/Dense>
@@ -43,21 +43,23 @@ int main(int argc, char* argv[]) {
 
   // return static_cast<int>(status);
 
-  auto rd = robot_dynamics::RobotDynamics(1.0f, 1.0f);
+  auto dt = 0.1f;
+  const std::size_t N = 1000;
+  auto rd = diff_drive_dynamics::DiffDriveDynamics(dt, 0.0, 0.0);
 
-  const size_t N = 100;
-  robot_dynamics::MatrixState<N> x_out = robot_dynamics::MatrixState<N>::Zero();
-  robot_dynamics::MatrixControl<N> u =
-      robot_dynamics::MatrixControl<N>::Zero();
-  robot_dynamics::Vector5f x0 = robot_dynamics::Vector5f::Zero();
+  diff_drive_dynamics::DiffDriveDynamics::MatrixState x_out; //=
+      // diff_drive_dynamics::DiffDriveDynamics::MatrixState::Zero(N);
+  diff_drive_dynamics::DiffDriveDynamics::MatrixControl u;// =
+      // diff_drive_dynamics::DiffDriveDynamics::MatrixControl::Zero(N);
+  diff_drive_dynamics::DiffDriveDynamics::VectorState x0;// =
+      // diff_drive_dynamics::DiffDriveDynamics::VectorState::Zero();
 
   u.block<2, 10>(0, 0).setConstant(1.0f);
 
-  rd.simulate<N>(u, x0, x_out);
+  rd.simulate(u, x0, x_out);
 
   auto rsp = robot_state_plotter::RobotStatePlotter(0.1);
 
   // rsp.print_matrix(u);
-  rsp.plot<N>(u, x_out);
-
+  rsp.plot(u, x_out);
 }

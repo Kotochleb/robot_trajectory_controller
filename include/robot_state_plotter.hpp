@@ -7,7 +7,7 @@
 #include <matplot/matplot.h>
 #include <Eigen/Dense>
 
-#include <robot_dynamics.hpp>
+#include <diff_drive_dynamics.hpp>
 
 namespace robot_state_plotter {
 namespace plt = matplot;
@@ -22,18 +22,17 @@ class RobotStatePlotter {
   //   std::cout << mat.format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]"));
   // };
 
-  template <std::size_t N>
-  void plot(const robot_dynamics::MatrixControl<N>& u,
-            const robot_dynamics::MatrixState<N>& x_out) {
-
-    std::vector<float> t(N);
+  void plot(const diff_drive_dynamics::DiffDriveDynamics::MatrixControl& u,
+            const diff_drive_dynamics::DiffDriveDynamics::MatrixState& x_out) {
+    assert(u.rows() == x_out.rows());
+    std::vector<float> t(u.rows());
     std::iota(t.begin(), t.end(), 0);
     std::for_each(t.begin(), t.end(), [&](float& el) { el *= dt_; });
 
-    std::vector<std::string> y_axis = {"Lin acc", "Ang acc", "Pos y", "Lin vel",
-                                       "Ang vel"};
-    std::size_t plt_cnt = 0;
+    const std::vector<std::string> y_axis = {"Lin acc", "Ang acc", "Pos y",
+                                             "Lin vel", "Ang vel"};
     const std::size_t num_plots = 5;
+    std::size_t plt_cnt = 0;
 
     for (const auto row : u.rowwise()) {
       const auto x = std::vector<float>(row.begin(), row.end());

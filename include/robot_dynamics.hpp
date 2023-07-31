@@ -11,24 +11,22 @@
 namespace robot_dynamics {
 using namespace Eigen;
 
-template <std::size_t N>
-using MatrixState = Matrix<float, 5, N>;
-
-template <std::size_t N>
-using MatrixControl = Matrix<float, 2, N>;
-
-typedef Matrix<float, 5, 1> Vector5f;
-
+template <class Derived, std::size_t state_variables, std::size_t control_inputs>
 class RobotDynamics {
  public:
-  RobotDynamics(const float wheel_separation, const float wheel_radius){};
-
-  template <std::size_t N>
-  void simulate(const MatrixControl<N>& u, const Vector5f& x0,
-                MatrixState<N>& x_out) {
+  typedef Matrix<float, state_variables, Dynamic> MatrixState;
+  typedef Matrix<float, control_inputs, Dynamic> MatrixControl;
+  typedef Matrix<float, state_variables, 1> VectorState;
+  typedef Matrix<float, control_inputs, 1> VectorControl;
+  
+  RobotDynamics() {};
+  
+  void simulate(const MatrixControl& u, const VectorState& x0,
+                MatrixState& x_out) {
+    assert(u.rows() == x_out.rows());
     x_out.col(0) = x0;
-    Vector5f k1, k2, k3, k4;
-    for (std::size_t i = 0; i < N - 1; i++) {
+    VectorState k1, k2, k3, k4;
+    for (std::size_t i = 0; i < u.rows() - 1; i++) {
       const auto uk = u.col(i);
       const auto xk = x_out.col(i);
       sim_step(xk, uk, k1);
@@ -37,17 +35,16 @@ class RobotDynamics {
       sim_step(xk + k3 * dt_, uk, k4);
       x_out.col(i + 1) = xk + (dt_ / 6.0f) * (k1 + 2.0f * k2 + 2.0f * k3 + k4);
     }
-  }
+  };
+
 
  private:
-  inline void sim_step(const Vector5f& x0, const Vector2f& u, Vector5f& dx) {
-    dx[0] = u[0];
-    dx[1] = x0[0] * sin(x0[4]);
-    dx[2] = x0[0] * cos(x0[4]);
-    dx[3] = u[1];
-    dx[4] = x0[3];
-  }
-  const float dt_{0.1f};
+  inline void sim_step(const VectorState& x0, const VectorControl& u,
+                       VectorState& dx) {
+    static_cast<Derived*>(this)->sim_step(x0, u, dx);
+  };
+
+  const float dt_{0.1};
 };
 
 };  // namespace robot_dynamics
