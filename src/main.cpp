@@ -2,6 +2,7 @@
 // #include "IpSolveStatistics.hpp"
 // #include "robot_tnlp.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -13,7 +14,7 @@
 
 namespace plt = matplot;
 
-int main(int argc, char* argv[]) {
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
   // Ipopt::SmartPtr<Ipopt::TNLP> inverted_pendulum = new RobotTNLP();
   // Ipopt::SmartPtr<Ipopt::IpoptApplication> app = IpoptApplicationFactory();
   // auto status = app->Initialize();
@@ -44,22 +45,35 @@ int main(int argc, char* argv[]) {
   // return static_cast<int>(status);
 
   auto dt = 0.1f;
-  const std::size_t N = 1000;
-  auto rd = diff_drive_dynamics::DiffDriveDynamics(dt, 0.0, 0.0);
+  const std::size_t N = 10000;
+  diff_drive_dynamics::DiffDriveDynamics::MatrixWeights W;
+  W.setIdentity();
+  auto rd = diff_drive_dynamics::DiffDriveDynamics(0.0, 0.0, dt, W);
 
-  diff_drive_dynamics::DiffDriveDynamics::MatrixState x_out; //=
-      // diff_drive_dynamics::DiffDriveDynamics::MatrixState::Zero(N);
-  diff_drive_dynamics::DiffDriveDynamics::MatrixControl u;// =
-      // diff_drive_dynamics::DiffDriveDynamics::MatrixControl::Zero(N);
-  diff_drive_dynamics::DiffDriveDynamics::VectorState x0;// =
-      // diff_drive_dynamics::DiffDriveDynamics::VectorState::Zero();
+  diff_drive_dynamics::DiffDriveDynamics::MatrixStateExt x_out =
+      diff_drive_dynamics::DiffDriveDynamics::MatrixStateExt::Zero(6, N);
+  diff_drive_dynamics::DiffDriveDynamics::MatrixControl u =
+      diff_drive_dynamics::DiffDriveDynamics::MatrixControl::Zero(2, N);
+  diff_drive_dynamics::DiffDriveDynamics::VectorStateExt x0 =
+      diff_drive_dynamics::DiffDriveDynamics::VectorStateExt::Zero();
+  diff_drive_dynamics::DiffDriveDynamics::VectorStateExt xf =
+      diff_drive_dynamics::DiffDriveDynamics::VectorStateExt::Zero();
 
   u.block<2, 10>(0, 0).setConstant(1.0f);
 
-  rd.simulate(u, x0, x_out);
+  rd.rk4(u, x0, xf, x_out);
 
-  auto rsp = robot_state_plotter::RobotStatePlotter(0.1);
+  robot_dynamics::number_t p;
+  diff_drive_dynamics::DiffDriveDynamics::VectorGrad g =
+      diff_drive_dynamics::DiffDriveDynamics::VectorGrad::Zero(N);
 
-  // rsp.print_matrix(u);
-  rsp.plot(u, x_out);
+  rd.get_gradient(x0, xf, u, p, g);
+  std::cout << p << std::endl;
+
+  // std::cout << p << std::endl;
+
+  // auto rsp = robot_state_plotter::RobotStatePlotter(0.1);
+
+  //   rsp.print_matrix(u);
+  // rsp.plot(u, x_out);
 }

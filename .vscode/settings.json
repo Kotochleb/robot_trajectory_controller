@@ -52,6 +52,10 @@
         "valarray": "cpp",
         "regex": "cpp",
         "unordered_set": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "*.expression": "cpp",
+        "alignedvector3": "cpp",
+        "fft": "cpp",
+        "chrono": "cpp"
     }
 }
