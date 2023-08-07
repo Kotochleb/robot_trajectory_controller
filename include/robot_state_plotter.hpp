@@ -32,8 +32,9 @@ class RobotStatePlotter {
     std::iota(t.begin(), t.end(), 0);
     std::for_each(t.begin(), t.end(), [&](number_t& el) { el *= dt_; });
 
-    const std::vector<std::string> y_axis = {"Lin acc", "Ang acc", "Lin vel",
-                                             "Ang vel", "Pos y"};
+    const std::vector<std::string> y_axis = {
+        "Lin acc [rad/s2]", "Ang acc [m/s2]", "Lin vel [rad/s]",
+        "Ang vel [m/s]", "Pos y [m]"};
     const std::size_t num_plots = 5;
     std::size_t plt_cnt = 0;
 
@@ -41,6 +42,7 @@ class RobotStatePlotter {
       const auto x = std::vector<number_t>(row.begin(), row.end());
       plt::subplot(num_plots, 1, plt_cnt);
       plt::ylabel(y_axis[plt_cnt]);
+      plt::xlabel("Time [s]");
       plt::plot(t, x);
       plt_cnt++;
     }
@@ -51,6 +53,7 @@ class RobotStatePlotter {
       const auto x = std::vector<number_t>(row.begin(), row.end());
       plt::subplot(num_plots, 1, plt_cnt);
       plt::ylabel(y_axis[plt_cnt]);
+      plt::xlabel("Time [s]");
       plt::plot(t, x);
       plt_cnt++;
     }
@@ -61,6 +64,7 @@ class RobotStatePlotter {
     const auto y =
         std::vector<number_t>(x_out.row(2).begin(), x_out.row(2).end());
     plt::ylabel(y_axis[plt_cnt]);
+    plt::xlabel("Pos X [m]");
     plt::plot(x, y);
 
     auto f = plt::gcf();

@@ -85,8 +85,7 @@ class ControllerCost : public ifopt::CostTerm {
     Dynamics::MatrixControl u(2, vals.rows() / 2);
     u.row(0) = vals.segment(0, vals.rows() / 2);
     u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
-    const double cost = dynamics_->getCost(u);
-    return cost;
+    return dynamics_->getCost(u);
   };
 
   void FillJacobianBlock(std::string var_set,
