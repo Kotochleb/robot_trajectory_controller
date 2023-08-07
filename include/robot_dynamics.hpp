@@ -3,116 +3,160 @@
 
 #include <Eigen/Dense>
 
-#include "IpTypes.hpp"
-
 namespace robot_dynamics {
 
-typedef Ipopt::Number number_t;
+typedef double number_t;
 
 // nst is number of state variables
 // nctr is number of control inputs
-template <class Derived, std::size_t nst, std::size_t nctr>
+template <class Derived, int nst, int nctr>
 struct RobotDynamics {
  public:
-  static constexpr std::size_t nst_ext = nst + 1;
-  typedef Eigen::Matrix<number_t, nst_ext, Eigen::Dynamic> MatrixStateExt;
-  typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic> MatrixControl;
-  typedef Eigen::Matrix<number_t, nst_ext, Eigen::Dynamic> MatrixPsi;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  static constexpr int nst_ext = nst + 1;
+  static constexpr int npsi = nst + nctr;
+  typedef Eigen::Matrix<number_t, nst_ext, Eigen::Dynamic, Eigen::ColMajor>
+      MatrixStateExt;
+  typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor>
+      MatrixControl;
+  typedef Eigen::Matrix<number_t, npsi, Eigen::Dynamic, Eigen::ColMajor>
+      MatrixPsi;
   typedef Eigen::Matrix<number_t, nst_ext, 1> VectorStateExt;
-  typedef Eigen::Matrix<number_t, 1, nst_ext> RowVectorStateExt;
+  typedef Eigen::Matrix<number_t, nst, 1> VectorState;
   typedef Eigen::Matrix<number_t, nctr, 1> VectorControl;
-  typedef Eigen::Matrix<number_t, nst_ext, 1> VectorPsi;
+  typedef Eigen::Matrix<number_t, npsi, 1> VectorPsi;
   typedef Eigen::DiagonalMatrix<number_t, nst_ext> MatrixWeights;
-  typedef Eigen::Matrix<number_t, 1, Eigen::Dynamic> VectorGrad;
+  typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor>
+      VectorGrad;
 
   RobotDynamics(const number_t dt, const MatrixWeights& W) : dt_(dt), W_(W){};
 
-  void rk4(const MatrixControl& u, const VectorStateExt& x0,
-           const VectorStateExt& xf, MatrixStateExt& x_out) {
-    assert(u.cols() == x_out.cols());
+  MatrixStateExt rk4(const MatrixControl& u) { return rk4(u, x0_, xf_); }
+
+  MatrixStateExt rk4(const MatrixControl& u, const VectorStateExt& x0,
+                     const VectorStateExt& xf) {
+
+    MatrixStateExt x_out(x0.rows(), u.cols());
     x_out.col(0) = x0;
-    VectorStateExt k1, k2, k3, k4;
     for (Eigen::Index i = 0; i < u.cols() - 1; i++) {
       const auto& uk = u.col(i);
       const auto& xk = x_out.col(i);
-      get_d_x(xk, xf, uk, k1);
-      get_d_x(xk + k1 * dt_ / 2.0, xf, uk, k2);
-      get_d_x(xk + k2 * dt_ / 2.0, xf, uk, k3);
-      get_d_x(xk + k3 * dt_, xf, uk, k4);
+
+      const auto k1 = getDX(xk, xf, uk);
+      const auto k2 = getDX(xk + k1 * dt_ / 2.0, xf, uk);
+      const auto k3 = getDX(xk + k2 * dt_ / 2.0, xf, uk);
+      const auto k4 = getDX(xk + k3 * dt_, xf, uk);
 
       x_out.col(i + 1) = xk;
-      x_out.col(i + 1).noalias() += (dt_ / 6.0f) * (k1 + k4 + 2.0f * (k2 + k3));
+      x_out.col(i + 1).noalias() += (dt_ / 6.0) * (k1 + k4 + 2.0 * (k2 + k3));
     }
+    return x_out;
   };
 
-  void get_gradient(const VectorStateExt& x0, const VectorStateExt& xf,
-                    const MatrixControl& u, number_t& p, VectorGrad& g) {
-    assert(u.cols() == g.cols());
+  inline number_t getCost(const MatrixControl& u) {
+    return getCost(x0_, xf_, u);
+  }
 
-    MatrixStateExt x = MatrixStateExt(nst_ext, u.cols());
-    rk4(u, x0, xf, x);
-    p = cost_fun(x, xf, u);
+  inline number_t getCost(const VectorStateExt& x0, const VectorStateExt& xf,
+                          const MatrixControl& u) {
+    MatrixStateExt x = rk4(u, x0, xf);
+    return costFun(x, xf, u);
+  };
 
-    const VectorPsi psi_f = -1.0f * (W_ * (x.col(x.cols() - 1) - xf));
+  inline VectorGrad getGradient(const MatrixControl& u) {
+    return getGradient(x0_, xf_, u);
+  }
 
-    MatrixPsi psi_out = MatrixPsi(nst_ext, u.cols());
-    rk4_psi(x, u, psi_f, psi_out);
-    
-    VectorGrad phi_integrated = psi_out.row(psi_out.rows() - 1);
+  inline VectorGrad getGradient(const VectorStateExt& x0,
+                                const VectorStateExt& xf,
+                                const MatrixControl& u) {
+    MatrixStateExt x = rk4(u, x0, xf);
+
+    const VectorPsi psi_f = getPsiF(x.col(x.cols() - 1), xf);
+
+    MatrixPsi psi_out = MatrixPsi(psi_f.rows(), u.cols());
+    rk4Psi(x, u, psi_f, psi_out);
+
+    VectorGrad phi_integrated =
+        psi_out.block(psi_out.rows() - u.rows(), 0, u.rows(), u.cols());
+    VectorGrad g(u.rows(), u.cols());
     for (Eigen::Index i = 0; i < phi_integrated.cols() - 1; i++) {
-      g[i] = phi_integrated[i] - phi_integrated[i + 1];
+      g.col(i) = phi_integrated.col(i) - phi_integrated.col(i + 1);
     }
+    return g;
   };
+
+  inline void setupState(const VectorState& x0, const VectorState& xf) {
+    x0_.segment(0, nst) = x0;
+    xf_.segment(0, nst) = xf;
+    x0_[nst_ext - 1] = 0.0;
+    xf_[nst_ext - 1] = 0.0;
+  }
+
+  inline MatrixControl getInitialValues(const int N) {
+    return static_cast<Derived*>(this)->getInitialValues(x0_, xf_, N);
+  };
+
+  inline MatrixControl getInitialValues(const VectorStateExt& x,
+                                        const VectorStateExt& xf, const int N) {
+    return static_cast<Derived*>(this)->getInitialValues(x, xf, N);
+  };
+
+  constexpr int getNStateVar() { return nst; }
+  constexpr int getNExtStateVar() { return nst_ext; }
+  constexpr int getNControlVar() { return nctr; }
+  constexpr int getNPsiVar() { return npsi; }
 
  protected:
   const number_t dt_;
   const MatrixWeights W_;
+  VectorStateExt x0_;
+  VectorStateExt xf_;
 
  private:
-  void rk4_psi(const MatrixStateExt& x, const MatrixControl& u,
-               const VectorPsi& psi_f, MatrixPsi& psi_out) {
+  void rk4Psi(const MatrixStateExt& x, const MatrixControl& u,
+              const VectorPsi& psi_f, MatrixPsi& psi_out) {
     assert(u.cols() == psi_out.cols());
     assert(u.cols() == x.cols());
 
     psi_out.col(psi_out.cols() - 1) = psi_f;
 
-    VectorPsi dp1, dp2, dp3, dp4;
     for (Eigen::Index k = u.cols() - 1; k > 0; k--) {
       const auto& pk = psi_out.col(k);
       const auto& uk1 = u.col(k - 1);
       const auto& xk = x.col(k);
       const auto& xk1 = x.col(k - 1);
-      const auto x05 = (xk + xk1) / 2.0f;
+      const auto x05 = (xk + xk1) / 2.0;
 
-      get_neg_d_psi(xk, uk1, pk, dp1);
-      get_neg_d_psi(x05, uk1, pk + dp1 * dt_ / 2.0f, dp2);
-      get_neg_d_psi(x05, uk1, pk + dp2 * dt_ / 2.0f, dp3);
-      get_neg_d_psi(x05, uk1, pk + dp3 * dt_, dp4);
+      const auto dp1 = -getDPsi(xk, uk1, pk);
+      const auto dp2 = -getDPsi(x05, uk1, pk + dp1 * dt_ / 2.0);
+      const auto dp3 = -getDPsi(x05, uk1, pk + dp2 * dt_ / 2.0);
+      const auto dp4 = -getDPsi(x05, uk1, pk + dp3 * dt_);
 
       psi_out.col(k - 1) = pk;
       psi_out.col(k - 1).noalias() +=
-          (dt_ / 6.0f) * (dp1 + dp4 + 2.0f * (dp2 + dp3));
+          (dt_ / 6.0) * (dp1 + dp4 + 2.0 * (dp2 + dp3));
     };
   };
-  inline void get_d_x(const VectorStateExt& x0, const VectorStateExt& xf,
-                      const VectorControl& u, VectorStateExt& dx) {
-    static_cast<Derived*>(this)->get_d_x(x0, xf, u, dx);
+
+  inline VectorStateExt getDX(const VectorStateExt& x, const VectorStateExt& xf,
+                              const VectorControl& u) {
+    return static_cast<Derived*>(this)->getDX(x, xf, u);
   };
 
-  inline void get_neg_d_psi(const VectorStateExt& x, const VectorControl& u,
-                            const VectorPsi& p, VectorPsi& dp) {
-    get_d_psi(x, u, p, dp);
-    dp.array() *= -1.0f;
+  inline VectorPsi getDPsi(const VectorStateExt& x,
+                           [[maybe_unused]] const VectorControl& u,
+                           const VectorPsi& p) {
+    return static_cast<Derived*>(this)->getDPsi(x, u, p);
   };
 
-  inline void get_d_psi(const VectorStateExt& x, const VectorControl& u,
-                        const VectorPsi& p, VectorPsi& dp) {
-    static_cast<Derived*>(this)->get_d_psi(x, u, p, dp);
+  inline number_t costFun(const MatrixStateExt& x_out, const VectorStateExt& xf,
+                          const MatrixControl& u) {
+    return static_cast<Derived*>(this)->costFun(x_out, xf, u);
   };
 
-  inline number_t cost_fun(const MatrixStateExt& x_out,
-                           const VectorStateExt& xf, const MatrixControl& u) {
-    return static_cast<Derived*>(this)->cost_fun(x_out, xf, u);
+  inline VectorPsi getPsiF(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->getPsiF(x, xf);
   };
 };
 };  // namespace robot_dynamics

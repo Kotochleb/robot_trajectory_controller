@@ -24,8 +24,9 @@ class RobotStatePlotter {
   //   std::cout << mat.format(Eigen::IOFormat(4, 0, ", ", "\n", "[", "]"));
   // };
 
-  void plot(const diff_drive_dynamics::DiffDriveDynamics::MatrixControl& u,
-            const diff_drive_dynamics::DiffDriveDynamics::MatrixStateExt& x_out) {
+  template <typename DerivedControl, typename DerivedState>
+  void plot(const Eigen::MatrixBase<DerivedControl>& u,
+            const Eigen::MatrixBase<DerivedState>& x_out) {
     assert(u.cols() == x_out.cols());
     std::vector<number_t> t(u.cols());
     std::iota(t.begin(), t.end(), 0);

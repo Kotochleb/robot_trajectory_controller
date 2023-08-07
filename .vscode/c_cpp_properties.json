@@ -5,13 +5,15 @@
             "includePath": [
                 "include",
                 "/usr/include/**",
-                "build/_deps/**"
+                "build/_deps/**",
+                "build/_deps/ifopt-src/**"
             ],
             "browse": {
                 "path": [
                     "${workspaceFolder}",
                     "/usr/include",
-                    "build/_deps/**"
+                    "build/_deps/**",
+                    "build/_deps/ifopt-src/**"
                 ]
             },
             "defines": [],
