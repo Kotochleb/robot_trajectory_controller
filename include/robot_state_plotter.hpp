@@ -56,8 +56,10 @@ class RobotStatePlotter {
     }
 
     plt::subplot(num_plots, 1, plt_cnt);
-    const auto x = std::vector<number_t>(x_out.row(1).begin(), x_out.row(1).end());
-    const auto y = std::vector<number_t>(x_out.row(2).begin(), x_out.row(2).end());
+    const auto x =
+        std::vector<number_t>(x_out.row(1).begin(), x_out.row(1).end());
+    const auto y =
+        std::vector<number_t>(x_out.row(2).begin(), x_out.row(2).end());
     plt::ylabel(y_axis[plt_cnt]);
     plt::plot(x, y);
 
