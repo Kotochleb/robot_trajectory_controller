@@ -22,14 +22,17 @@ class ControllerVariables : public ifopt::VariableSet {
       : ifopt::VariableSet(horizon * ctr_mat_cols, "controller_var_set"),
         dynamics_(dynamics),
         horizon_(horizon) {
-    state_ = dynamics_->serializeControl(dynamics_->getInitialValues(horizon));
+    const auto u0 = dynamics_->getInitialValues(horizon);
+    state_ = u0.reshaped<Eigen::RowMajor>().transpose();
   }
 
   void SetVariables(const ifopt::Component::VectorXd& x) override {
     state_ = x;
   };
 
-  ifopt::Component::VectorXd GetValues() const override { return state_; };
+  ifopt::Component::VectorXd GetValues() const override {
+    return state_;
+  };
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
@@ -73,19 +76,27 @@ class ControllerCost : public ifopt::CostTerm {
       : ifopt::CostTerm("controller_cost"), dynamics_(dynamics) {}
 
   double GetCost() const override {
-    const auto u = dynamics_->deserializeControl(
-        GetVariables()->GetComponent("controller_var_set")->GetValues());
-    return dynamics_->getCost(u);
+    const auto vals =
+        GetVariables()->GetComponent("controller_var_set")->GetValues();
+    Dynamics::MatrixControl u(2, vals.rows() / 2);
+    u.row(0) = vals.segment(0, vals.rows() / 2);
+    u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
+    const double cost = dynamics_->getCost(u);
+    return cost;
   };
 
   void FillJacobianBlock(std::string var_set,
                          ifopt::Component::Jacobian& jac) const override {
     if (var_set == "controller_var_set") {
-      const auto u = dynamics_->deserializeControl(
-          GetVariables()->GetComponent("controller_var_set")->GetValues());
-      const auto g = dynamics_->serializeGradient(dynamics_->getGradient(u));
-      for (Eigen::Index i = 0; i < g.cols(); i++) {
-        jac.coeffRef(0, i) = g(0, i);
+      const auto vals =
+          GetVariables()->GetComponent("controller_var_set")->GetValues();
+      const auto u = vals.reshaped<Eigen::RowMajor>(2, vals.rows() / 2);
+
+      const auto g = dynamics_->getGradient(u);
+      const auto serial_g = g.reshaped<Eigen::RowMajor>().transpose();
+      
+      for (Eigen::Index i = 0; i < serial_g.cols(); i++) {
+        jac.coeffRef(0, i) = serial_g(0, i);
       }
     }
   }

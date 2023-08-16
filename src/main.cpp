@@ -20,17 +20,19 @@ namespace plt = matplot;
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
   auto dt = 0.05;
-  const std::size_t N = 1000;
+  const std::size_t N = 200;
 
   diff_drive_dynamics::DiffDriveDynamics::MatrixWeights W;
   W.setIdentity();
+  W.diagonal()[1] = 100.0;
+  W.diagonal()[2] = 100.0;
   auto rd =
       std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(0.0, 0.0, dt, W);
 
   diff_drive_dynamics::DiffDriveDynamics::VectorState x0;
   x0 << 0.0, 0.0, 0.0, 0.0, 0.0;
   diff_drive_dynamics::DiffDriveDynamics::VectorState xf;
-  xf << 0.0, 5.0, 0.0, 0.0, 0.0;
+  xf << 0.2, -1.0, 2.0, -0.2, M_PI/2.0;
   rd->setupState(x0, xf);
 
   auto variables = std::make_shared<controller_nlp::ControllerVariables>(rd, N);
@@ -44,8 +46,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
   nlp.PrintCurrent();
 
   ifopt::IpoptSolver ipopt;
-  // ipopt.SetOption("linear_solver", "mumps");
-  // ipopt.SetOption("jacobian_approximation", "exact");
+
+  ipopt.SetOption("max_iter", 10000);
 
   ipopt.Solve(nlp);
   Eigen::VectorXd vals = nlp.GetOptVariables()->GetValues();
@@ -56,6 +58,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
   u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
 
   const auto x_out = rd->rk4(u);
+
+  std::cout << x_out.col(x_out.cols() - 1).segment<5>(0) << std::endl;
+
   auto rsp = robot_state_plotter::RobotStatePlotter(dt);
   rsp.plot(u, x_out);
 }

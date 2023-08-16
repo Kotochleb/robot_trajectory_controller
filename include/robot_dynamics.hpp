@@ -1,9 +1,8 @@
 #ifndef __ROBOT_DYNAMICS_HPP__
 #define __ROBOT_DYNAMICS_HPP__
 
+#include <Eigen/Core>
 #include <Eigen/Dense>
-
-#include <iostream>
 
 namespace robot_dynamics {
 
@@ -29,7 +28,7 @@ struct RobotDynamics {
   typedef Eigen::Matrix<number_t, npsi, 1> VectorPsi;
   typedef Eigen::DiagonalMatrix<number_t, nst_ext> MatrixWeights;
   typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor>
-      VectorGrad;
+      MatrixGrad;
 
   RobotDynamics(const number_t dt, const MatrixWeights& W) : dt_(dt), W_(W){};
 
@@ -53,32 +52,6 @@ struct RobotDynamics {
     return x_out;
   };
 
-  inline Eigen::VectorXd serializeGradient(const VectorGrad& g) {
-    Eigen::VectorXd values(g.rows() * g.cols());
-    for (Eigen::Index i = 0; i < g.rows() - 1; i++) {
-      values.segment(i * g.cols(), (i + 1) * g.cols()) = g.row(i);
-    }
-    return values;
-  }
-
-  inline Eigen::VectorXd serializeControl(const MatrixControl& u) {
-    Eigen::VectorXd values(u.rows() * u.cols());
-    for (Eigen::Index i = 0; i < u.rows() - 1; i++) {
-      values.segment(i * u.cols(), (i + 1) * u.cols()) = u.row(i);
-    }
-    return values;
-  }
-
-  inline MatrixControl deserializeControl(const Eigen::VectorXd& vals) {
-    // check if rows can be equally divided into separate inputs
-    assert((vals.rows() % nctr) == 0);
-    MatrixControl u(nctr, vals.rows() / nctr);
-    for (Eigen::Index i = 0; i < u.rows() - 1; i++) {
-      u.row(i) = vals.segment(i * u.cols(), (i + 1) * u.cols());
-    }
-    return u;
-  }
-
   inline number_t getCost(const MatrixControl& u) {
     return getCost(x0_, xf_, u);
   }
@@ -89,11 +62,11 @@ struct RobotDynamics {
     return costFun(x, xf, u);
   };
 
-  inline VectorGrad getGradient(const MatrixControl& u) {
+  inline MatrixGrad getGradient(const MatrixControl& u) {
     return getGradient(x0_, xf_, u);
   }
 
-  inline VectorGrad getGradient(const VectorStateExt& x0,
+  inline MatrixGrad getGradient(const VectorStateExt& x0,
                                 const VectorStateExt& xf,
                                 const MatrixControl& u) {
     MatrixStateExt x = rk4(u, x0, xf);
@@ -104,11 +77,11 @@ struct RobotDynamics {
     MatrixPsi psi_out = MatrixPsi(psi_f.rows(), u.cols());
     rk4Psi(x, u, psi_f, psi_out);
 
-    VectorGrad phi_integrated =
+    MatrixGrad phi_integrated =
         psi_out.block(psi_out.rows() - u.rows(), 0, u.rows(), u.cols());
-    VectorGrad g(u.rows(), u.cols());
-    for (Eigen::Index i = 0; i < phi_integrated.cols() - 1; i++) {
-      g.col(i) = phi_integrated.col(i) - phi_integrated.col(i + 1);
+    MatrixGrad g(u.rows(), u.cols());
+    for (Eigen::Index i = 1; i < phi_integrated.cols(); i++) {
+      g.col(i) = phi_integrated.col(i - 1) - phi_integrated.col(i);
     }
     return g;
   };

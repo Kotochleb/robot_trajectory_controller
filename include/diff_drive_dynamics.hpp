@@ -45,8 +45,8 @@ struct DiffDriveDynamics
                               const VectorControl& u) {
     VectorStateExt dx;
     dx[0] = u[0];
-    dx[1] = x[0] * sin(x[4]);
-    dx[2] = x[0] * cos(x[4]);
+    dx[1] = x[0] * cos(x[4]);
+    dx[2] = x[0] * sin(x[4]);
     dx[3] = u[1];
     dx[4] = x[3];
     dx[5] = q(x, xf);
@@ -75,14 +75,14 @@ struct DiffDriveDynamics
 
   inline number_t q(const VectorStateExt& x, const VectorStateExt& xf) {
     const VectorStateExt dx_end = dXF(x, xf);
-    return dx_end.transpose() * dx_end;
+    return dx_end.transpose() * W_ * dx_end;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x,
                              const VectorStateExt& xf) {
     VectorStateExt dq = x;
     dq.noalias() -= xf;
-    return dq;
+    return W_ * dq;
   }
 
   inline number_t costFun(const MatrixStateExt& x_out, const VectorStateExt& xf,
@@ -90,22 +90,15 @@ struct DiffDriveDynamics
 
     const number_t target_difference = q(x_out.col(x_out.cols() - 1), xf);
     const number_t state_cost = x_out(x_out.rows() - 1, x_out.cols() - 1);
-    return state_cost + target_difference;
+    return 0.5 * target_difference + state_cost;
   };
-
-  // inline VectorPsi getPsiF(const VectorStateExt& x, const VectorStateExt& xf) {
-  //   const VectorStateExt dx_end = dXF(x, xf);
-  //   VectorPsi psi_f;
-  //   psi_f.segment<dx_end.rows()>(0) = -1.0 * (W_ * dx_end);
-  //   return psi_f;
-  // };
 
   // auxiliary function to computing minimum angle theta
   inline VectorStateExt dXF(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dxf = x;
-    dxf.segment<3>(0).noalias() -= xf.segment<3>(0);
-    dxf[4] = atan2(sin(xf[4] - x[4]), cos(xf[4] - x[4]));
-    // dxf[4] = xf[4] - x[4];
+    dxf.segment<4>(0).noalias() -= xf.segment<4>(0);
+    // dxf[4] = atan2(sin(xf[4] - x[4]), cos(xf[4] - x[4]));
+    dxf[4] = xf[4] - x[4];
     dxf[5] = 0.0;
     return dxf;
   }
