@@ -20,7 +20,7 @@ namespace plt = matplot;
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
   auto dt = 0.05;
-  const std::size_t N = 200;
+  const std::size_t N = 1000;
 
   diff_drive_dynamics::DiffDriveDynamics::MatrixWeights W;
   W.setIdentity();
@@ -28,9 +28,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
       std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(0.0, 0.0, dt, W);
 
   diff_drive_dynamics::DiffDriveDynamics::VectorState x0;
-  x0 << 0.0, 0.0, 0.0, 2.0, -3.14/2.0;
+  x0 << 0.0, 0.0, 0.0, 0.0, 0.0;
   diff_drive_dynamics::DiffDriveDynamics::VectorState xf;
-  xf << 0.0, 5.0, 5.0, 0.0, 0.0;
+  xf << 0.0, 5.0, 0.0, 0.0, 0.0;
   rd->setupState(x0, xf);
 
   auto variables = std::make_shared<controller_nlp::ControllerVariables>(rd, N);
@@ -56,6 +56,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
   u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
 
   const auto x_out = rd->rk4(u);
-  auto rsp = robot_state_plotter::RobotStatePlotter(0.1);
+  auto rsp = robot_state_plotter::RobotStatePlotter(dt);
   rsp.plot(u, x_out);
 }

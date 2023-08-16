@@ -98,7 +98,8 @@ struct RobotDynamics {
                                 const MatrixControl& u) {
     MatrixStateExt x = rk4(u, x0, xf);
 
-    const VectorPsi psi_f = getPsiF(x.col(x.cols() - 1), xf);
+    VectorPsi psi_f = VectorPsi::Zero();
+    psi_f.segment(0, xf.rows()) = -dqDx(x.col(x.cols() - 1), xf);
 
     MatrixPsi psi_out = MatrixPsi(psi_f.rows(), u.cols());
     rk4Psi(x, u, psi_f, psi_out);
@@ -179,8 +180,8 @@ struct RobotDynamics {
     return static_cast<Derived*>(this)->costFun(x_out, xf, u);
   };
 
-  inline VectorPsi getPsiF(const VectorStateExt& x, const VectorStateExt& xf) {
-    return static_cast<Derived*>(this)->getPsiF(x, xf);
+  inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->dqDx(x, xf);
   };
 };
 };  // namespace robot_dynamics
