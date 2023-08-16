@@ -3,6 +3,8 @@
 
 #include <Eigen/Dense>
 
+#include <iostream>
+
 namespace robot_dynamics {
 
 typedef double number_t;
@@ -35,7 +37,6 @@ struct RobotDynamics {
 
   MatrixStateExt rk4(const MatrixControl& u, const VectorStateExt& x0,
                      const VectorStateExt& xf) {
-
     MatrixStateExt x_out(x0.rows(), u.cols());
     x_out.col(0) = x0;
     for (Eigen::Index i = 0; i < u.cols() - 1; i++) {
@@ -47,11 +48,36 @@ struct RobotDynamics {
       const auto k3 = getDX(xk + k2 * dt_ / 2.0, xf, uk);
       const auto k4 = getDX(xk + k3 * dt_, xf, uk);
 
-      x_out.col(i + 1) = xk;
-      x_out.col(i + 1).noalias() += (dt_ / 6.0) * (k1 + k4 + 2.0 * (k2 + k3));
+      x_out.col(i + 1) = xk + (dt_ / 6.0) * (k1 + k4 + 2.0 * (k2 + k3));
     }
     return x_out;
   };
+
+  inline Eigen::VectorXd serializeGradient(const VectorGrad& g) {
+    Eigen::VectorXd values(g.rows() * g.cols());
+    for (Eigen::Index i = 0; i < g.rows() - 1; i++) {
+      values.segment(i * g.cols(), (i + 1) * g.cols()) = g.row(i);
+    }
+    return values;
+  }
+
+  inline Eigen::VectorXd serializeControl(const MatrixControl& u) {
+    Eigen::VectorXd values(u.rows() * u.cols());
+    for (Eigen::Index i = 0; i < u.rows() - 1; i++) {
+      values.segment(i * u.cols(), (i + 1) * u.cols()) = u.row(i);
+    }
+    return values;
+  }
+
+  inline MatrixControl deserializeControl(const Eigen::VectorXd& vals) {
+    // check if rows can be equally divided into separate inputs
+    assert((vals.rows() % nctr) == 0);
+    MatrixControl u(nctr, vals.rows() / nctr);
+    for (Eigen::Index i = 0; i < u.rows() - 1; i++) {
+      u.row(i) = vals.segment(i * u.cols(), (i + 1) * u.cols());
+    }
+    return u;
+  }
 
   inline number_t getCost(const MatrixControl& u) {
     return getCost(x0_, xf_, u);
@@ -133,9 +159,7 @@ struct RobotDynamics {
       const auto dp3 = -getDPsi(x05, uk1, pk + dp2 * dt_ / 2.0);
       const auto dp4 = -getDPsi(x05, uk1, pk + dp3 * dt_);
 
-      psi_out.col(k - 1) = pk;
-      psi_out.col(k - 1).noalias() +=
-          (dt_ / 6.0) * (dp1 + dp4 + 2.0 * (dp2 + dp3));
+      psi_out.col(k - 1) = pk + (dt_ / 6.0) * (dp1 + dp4 + 2.0 * (dp2 + dp3));
     };
   };
 

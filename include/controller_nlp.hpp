@@ -22,21 +22,14 @@ class ControllerVariables : public ifopt::VariableSet {
       : ifopt::VariableSet(horizon * ctr_mat_cols, "controller_var_set"),
         dynamics_(dynamics),
         horizon_(horizon) {
-    ctr_mat_ = dynamics_->getInitialValues(horizon);
+    state_ = dynamics_->serializeControl(dynamics_->getInitialValues(horizon));
   }
 
   void SetVariables(const ifopt::Component::VectorXd& x) override {
-    assert(x.rows() == ctr_mat_cols * horizon_);
-    ctr_mat_.row(0) = x.segment(0, horizon_);
-    ctr_mat_.row(1) = x.segment(horizon_, horizon_);
+    state_ = x;
   };
 
-  ifopt::Component::VectorXd GetValues() const override {
-    ifopt::Component::VectorXd values(ctr_mat_cols * horizon_);
-    values.segment(0, horizon_) = ctr_mat_.row(0);
-    values.segment(horizon_, horizon_) = ctr_mat_.row(1);
-    return values;
-  };
+  ifopt::Component::VectorXd GetValues() const override { return state_; };
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
@@ -47,7 +40,7 @@ class ControllerVariables : public ifopt::VariableSet {
 
  private:
   std::shared_ptr<Dynamics> dynamics_;
-  Dynamics::MatrixControl ctr_mat_;
+  ifopt::Component::VectorXd state_;
   const int horizon_;
   static constexpr int ctr_mat_cols = 2;
   static constexpr int x_rows = 5;
@@ -80,26 +73,19 @@ class ControllerCost : public ifopt::CostTerm {
       : ifopt::CostTerm("controller_cost"), dynamics_(dynamics) {}
 
   double GetCost() const override {
-    const auto vals =
-        GetVariables()->GetComponent("controller_var_set")->GetValues();
-    Dynamics::MatrixControl u(2, vals.rows() / 2);
-    u.row(0) = vals.segment(0, vals.rows() / 2);
-    u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
+    const auto u = dynamics_->deserializeControl(
+        GetVariables()->GetComponent("controller_var_set")->GetValues());
     return dynamics_->getCost(u);
   };
 
   void FillJacobianBlock(std::string var_set,
                          ifopt::Component::Jacobian& jac) const override {
     if (var_set == "controller_var_set") {
-      const auto vals =
-          GetVariables()->GetComponent("controller_var_set")->GetValues();
-      Dynamics::MatrixControl u(2, vals.rows() / 2);
-      u.row(0) = vals.segment(0, vals.rows() / 2);
-      u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
-      const auto g = dynamics_->getGradient(u);
+      const auto u = dynamics_->deserializeControl(
+          GetVariables()->GetComponent("controller_var_set")->GetValues());
+      const auto g = dynamics_->serializeGradient(dynamics_->getGradient(u));
       for (Eigen::Index i = 0; i < g.cols(); i++) {
         jac.coeffRef(0, i) = g(0, i);
-        jac.coeffRef(0, g.cols() + i) = g(1, i);
       }
     }
   }
