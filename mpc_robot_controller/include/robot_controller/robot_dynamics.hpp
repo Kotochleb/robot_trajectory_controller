@@ -137,6 +137,10 @@ struct RobotDynamics {
     };
   };
 
+  inline number_t q(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->q(x, xf);
+  };
+
   inline VectorStateExt getDX(const VectorStateExt& x, const VectorStateExt& xf,
                               const VectorControl& u) {
     return static_cast<Derived*>(this)->getDX(x, xf, u);
@@ -153,7 +157,8 @@ struct RobotDynamics {
     return static_cast<Derived*>(this)->costFun(x_out, xf, u);
   };
 
-  inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
+  inline VectorStateExt dqDx(const VectorStateExt& x,
+                             const VectorStateExt& xf) {
     return static_cast<Derived*>(this)->dqDx(x, xf);
   };
 };

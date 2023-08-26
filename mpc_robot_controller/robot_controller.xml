@@ -1,0 +1,9 @@
+<class_libraries>
+    <library path="mpc_robot_controller">
+        <class type="mpc_robot_controller::MPCRobotController" base_class_type="nav2_core::Controller">
+            <description>
+                mpc_robot_controller
+            </description>
+        </class>
+    </library>
+</class_libraries>

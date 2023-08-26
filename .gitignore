@@ -36,3 +36,10 @@ CMakeFiles/
 CMakeCache.txt
 Makefile
 cmake_install.cmake
+
+vcs/*
+
+.devcontainer/build/*
+.devcontainer/install/*
+.devcontainer/log/*
+.devcontainer/src/*

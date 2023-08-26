@@ -49,10 +49,7 @@ struct DiffDriveDynamics
     dx[2] = x[0] * sin(x[4]);
     dx[3] = u[1];
     dx[4] = x[3];
-    dx[5] = q(x, xf);
-
-    // const VectorStateExt dxf = dXF(x, xf);
-    // dx[5] = dxf.array().square().sum();
+    dx[5] = 50.0 * (pow(u[0], 2) + pow(u[1], 2));
     return dx;
   }
 
@@ -75,13 +72,14 @@ struct DiffDriveDynamics
 
   inline number_t q(const VectorStateExt& x, const VectorStateExt& xf) {
     const VectorStateExt dx_end = dXF(x, xf);
-    return dx_end.transpose() * W_ * dx_end;
+    return dx_end.transpose() * W_ * dx_end + x[5];
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x,
                              const VectorStateExt& xf) {
     VectorStateExt dq = x;
     dq.noalias() -= xf;
+    // VectorStateExt dq = dXF(x, xf);
     return W_ * dq;
   }
 

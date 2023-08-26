@@ -6,7 +6,9 @@
                 "include",
                 "/usr/include/**",
                 "build/_deps/**",
-                "build/_deps/ifopt-src/**"
+                "build/_deps/ifopt-src/**""/home/developer/ros2_ws/src",
+                "/opt/ros/galactic/include/**",
+                "/usr/include/ignition/**"
             ],
             "browse": {
                 "path": [
@@ -17,10 +19,11 @@
                 ]
             },
             "defines": [],
-            "compilerPath": "/usr/bin/c++",
+            "compilerPath": "/usr/bin/gcc",
+            "compileCommands": "/home/developer/ros2_ws/build/compile_commands.json",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x64",
+            "intelliSenseMode": "linux-gcc-x64",
             "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],

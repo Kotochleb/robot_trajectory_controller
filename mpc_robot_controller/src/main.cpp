@@ -19,20 +19,21 @@ namespace plt = matplot;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
-  auto dt = 0.05;
-  const std::size_t N = 200;
+  auto dt = 0.1;
+  const std::size_t N = 70;
 
   diff_drive_dynamics::DiffDriveDynamics::MatrixWeights W;
   W.setIdentity();
   W.diagonal()[1] = 100.0;
   W.diagonal()[2] = 100.0;
+  W.diagonal()[W.rows() - 1] = 0.0;
   auto rd =
       std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(0.0, 0.0, dt, W);
 
   diff_drive_dynamics::DiffDriveDynamics::VectorState x0;
   x0 << 0.0, 0.0, 0.0, 0.0, 0.0;
   diff_drive_dynamics::DiffDriveDynamics::VectorState xf;
-  xf << 0.2, -1.0, 2.0, -0.2, M_PI/2.0;
+  xf << 0.0, 2.0, 1.0, 0.0, 0.0;
   rd->setupState(x0, xf);
 
   auto variables = std::make_shared<controller_nlp::ControllerVariables>(rd, N);
