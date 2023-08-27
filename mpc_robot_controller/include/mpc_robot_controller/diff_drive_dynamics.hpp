@@ -14,16 +14,11 @@ using robot_dynamics::RobotDynamics;
 static constexpr int state_variables = 5;
 static constexpr int control_inputs = 2;
 
-struct DiffDriveDynamics
-    : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs> {
+struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs> {
  public:
-  friend class RobotDynamics<DiffDriveDynamics, state_variables,
-                             control_inputs>;
-  DiffDriveDynamics(const number_t wheel_separation,
-                    const number_t wheel_radius, const number_t dt,
-                    const MatrixWeights& W)
-      : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>(dt,
-                                                                          W),
+  friend class RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>;
+  DiffDriveDynamics(const number_t wheel_separation, const number_t wheel_radius, const number_t dt)
+      : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>(dt),
         wheel_separation_(wheel_separation),
         wheel_radius_(wheel_radius){
 
@@ -35,9 +30,8 @@ struct DiffDriveDynamics
   };
 
  private:
-  inline MatrixControl getInitialValues(
-      [[maybe_unused]] const VectorStateExt& x,
-      [[maybe_unused]] const VectorStateExt& xf, const int N) {
+  inline MatrixControl getInitialValues([[maybe_unused]] const VectorStateExt& x,
+                                        [[maybe_unused]] const VectorStateExt& xf, const int N) {
     return MatrixControl::Zero(control_inputs, N);
   };
 
@@ -53,8 +47,7 @@ struct DiffDriveDynamics
     return dx;
   }
 
-  inline VectorPsi getDPsi(const VectorStateExt& x,
-                           [[maybe_unused]] const VectorControl& u,
+  inline VectorPsi getDPsi(const VectorStateExt& x, [[maybe_unused]] const VectorControl& u,
                            const VectorPsi& p) {
     VectorPsi dp;
     dp[0] = -cos(x[4]) * p[1] - sin(x[4]) * p[2];
@@ -63,7 +56,7 @@ struct DiffDriveDynamics
     dp[3] = -p[4];
     dp[4] = x[0] * sin(x[4]) * p[1] - x[0] * cos(x[4]) * p[2];
 
-    dp.segment<5>(0).noalias() += dqDx(x, xf_).segment<5>(0);
+    dp.head(5).noalias() += dqDx(x, xf_).head(5);
 
     dp[5] = p[0];
     dp[6] = p[3];
@@ -75,8 +68,7 @@ struct DiffDriveDynamics
     return dx_end.transpose() * W_ * dx_end + x[5];
   }
 
-  inline VectorStateExt dqDx(const VectorStateExt& x,
-                             const VectorStateExt& xf) {
+  inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dq = x;
     dq.noalias() -= xf;
     // VectorStateExt dq = dXF(x, xf);
@@ -94,7 +86,7 @@ struct DiffDriveDynamics
   // auxiliary function to computing minimum angle theta
   inline VectorStateExt dXF(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dxf = x;
-    dxf.segment<4>(0).noalias() -= xf.segment<4>(0);
+    dxf.head(4).noalias() -= xf.head(4);
     // dxf[4] = atan2(sin(xf[4] - x[4]), cos(xf[4] - x[4]));
     dxf[4] = xf[4] - x[4];
     dxf[5] = 0.0;

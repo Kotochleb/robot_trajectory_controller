@@ -17,8 +17,7 @@ using Dynamics = diff_drive_dynamics::DiffDriveDynamics;
 
 class ControllerVariables : public ifopt::VariableSet {
  public:
-  ControllerVariables(const std::shared_ptr<Dynamics>& dynamics,
-                      const int horizon)
+  ControllerVariables(const std::shared_ptr<Dynamics>& dynamics, const int horizon)
       : ifopt::VariableSet(horizon * ctr_mat_cols, "controller_var_set"),
         dynamics_(dynamics),
         horizon_(horizon) {
@@ -26,13 +25,9 @@ class ControllerVariables : public ifopt::VariableSet {
     state_ = u0.reshaped<Eigen::RowMajor>().transpose();
   }
 
-  void SetVariables(const ifopt::Component::VectorXd& x) override {
-    state_ = x;
-  };
+  void SetVariables(const ifopt::Component::VectorXd& x) override { state_ = x; };
 
-  ifopt::Component::VectorXd GetValues() const override {
-    return state_;
-  };
+  ifopt::Component::VectorXd GetValues() const override { return state_; };
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
@@ -62,9 +57,8 @@ class ControllerConstraint : public ifopt::ConstraintSet {
     return ifopt::Component::VecBound(GetRows());
   }
 
-  void FillJacobianBlock(
-      [[maybe_unused]] std::string var_set,
-      [[maybe_unused]] ifopt::Component::Jacobian& jac_block) const override {}
+  void FillJacobianBlock([[maybe_unused]] std::string var_set,
+                         [[maybe_unused]] ifopt::Component::Jacobian& jac_block) const override {}
 
  private:
   std::shared_ptr<Dynamics> dynamics_;
@@ -76,25 +70,22 @@ class ControllerCost : public ifopt::CostTerm {
       : ifopt::CostTerm("controller_cost"), dynamics_(dynamics) {}
 
   double GetCost() const override {
-    const auto vals =
-        GetVariables()->GetComponent("controller_var_set")->GetValues();
+    const auto vals = GetVariables()->GetComponent("controller_var_set")->GetValues();
     Dynamics::MatrixControl u(2, vals.rows() / 2);
-    u.row(0) = vals.segment(0, vals.rows() / 2);
-    u.row(1) = vals.segment(vals.rows() / 2, vals.rows() / 2);
+    u.row(0) = vals.head(vals.rows() / 2);
+    u.row(1) = vals.tail(vals.rows() / 2);
     const double cost = dynamics_->getCost(u);
     return cost;
   };
 
-  void FillJacobianBlock(std::string var_set,
-                         ifopt::Component::Jacobian& jac) const override {
+  void FillJacobianBlock(std::string var_set, ifopt::Component::Jacobian& jac) const override {
     if (var_set == "controller_var_set") {
-      const auto vals =
-          GetVariables()->GetComponent("controller_var_set")->GetValues();
+      const auto vals = GetVariables()->GetComponent("controller_var_set")->GetValues();
       const auto u = vals.reshaped<Eigen::RowMajor>(2, vals.rows() / 2);
 
       const auto g = dynamics_->getGradient(u);
       const auto serial_g = g.reshaped<Eigen::RowMajor>().transpose();
-      
+
       for (Eigen::Index i = 0; i < serial_g.cols(); i++) {
         jac.coeffRef(0, i) = serial_g(0, i);
       }
