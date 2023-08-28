@@ -5,7 +5,7 @@
 
 #include <Eigen/Dense>
 
-#include <robot_dynamics.hpp>
+#include <mpc_robot_controller/robot_dynamics.hpp>
 
 namespace diff_drive_dynamics {
 
@@ -35,7 +35,7 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     return MatrixControl::Zero(control_inputs, N);
   };
 
-  inline VectorStateExt getDX(const VectorStateExt& x, const VectorStateExt& xf,
+  inline VectorStateExt getDX(const VectorStateExt& x, [[maybe_unused]] const VectorStateExt& xf,
                               const VectorControl& u) {
     VectorStateExt dx;
     dx[0] = u[0];

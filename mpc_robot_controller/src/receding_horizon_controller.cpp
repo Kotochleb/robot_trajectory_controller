@@ -2,16 +2,22 @@
 
 #include <memory>
 
+#include <ifopt/ipopt_solver.h>
+#include <ifopt/problem.h>
+#include <ifopt/test_vars_constr_cost.h>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/utils.h>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <nav2_costmap_2d/costmap_2d.hpp>
 #include <nav_msgs/msg/path.hpp>
 
-#include <diff_drive_dynamics.hpp>
-#include <robot_dynamics.hpp>
+#include <mpc_robot_controller/controller_nlp.hpp>
+#include <mpc_robot_controller/diff_drive_dynamics.hpp>
+#include <mpc_robot_controller/robot_dynamics.hpp>
 
 namespace receding_horizon_controller {
 
@@ -27,7 +33,7 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
 void RecidingHorizonController::roll(const std::size_t n) {
   u_.leftCols(n) = u_.middleCols(1, n);
   if (n < u_.cols()) {
-    u_.rightCols(u_.cols() - n) = 0.0;
+    u_.rightCols(u_.cols() - n).setConstant(0.0);
   }
 };
 
@@ -104,16 +110,22 @@ void RecidingHorizonController::setPositioningWeights() {
 
 void RecidingHorizonController::setMap(const nav2_costmap_2d::Costmap2D* map) {}
 
-void RecidingHorizonController::setFinalState(const geometry_msgs::msg::PoseStamped& pose) {
+void RecidingHorizonController::setState(const geometry_msgs::msg::PoseStamped& pose_start,
+                                         const geometry_msgs::msg::Twist& twist_start,
+                                         const geometry_msgs::msg::PoseStamped& pose_end) {
   Dynamics::VectorState x0;
-  x0 = Dynamics::VectorState::Zero();
+  x0[0] = twist_start.linear.x;
+  x0[1] = pose_start.pose.position.x;
+  x0[2] = pose_start.pose.position.y;
+  x0[3] = twist_start.angular.z;
+  x0[4] = tf2::getYaw(pose_start.pose.orientation);
 
   Dynamics::VectorState xf;
   xf[0] = 0.0;
-  xf[1] = pose.pose.position.x;
-  xf[2] = pose.pose.position.y;
+  xf[1] = pose_end.pose.position.x;
+  xf[2] = pose_end.pose.position.y;
   xf[3] = 0.0;
-  xf[4] = tf2::getYaw(pose.orientation);
+  xf[4] = tf2::getYaw(pose_end.pose.orientation);
   dynamics_->setupState(x0, xf);
 }
 

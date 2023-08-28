@@ -9,8 +9,7 @@
 #include <ifopt/cost_term.h>
 #include <ifopt/variable_set.h>
 
-#include <diff_drive_dynamics.hpp>
-#include <robot_state_plotter.hpp>
+#include <mpc_robot_controller/diff_drive_dynamics.hpp>
 
 namespace controller_nlp {
 using Dynamics = diff_drive_dynamics::DiffDriveDynamics;

@@ -3,16 +3,22 @@
 
 #include <memory>
 
+#include <ifopt/ipopt_solver.h>
+#include <ifopt/problem.h>
+#include <ifopt/test_vars_constr_cost.h>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/utils.h>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <nav2_costmap_2d/costmap_2d.hpp>
 #include <nav_msgs/msg/path.hpp>
 
-#include <diff_drive_dynamics.hpp>
-#include <robot_dynamics.hpp>
+#include <mpc_robot_controller/controller_nlp.hpp>
+#include <mpc_robot_controller/diff_drive_dynamics.hpp>
+#include <mpc_robot_controller/robot_dynamics.hpp>
 
 namespace receding_horizon_controller {
 
@@ -21,7 +27,7 @@ using Dynamics = diff_drive_dynamics::DiffDriveDynamics;
 // template <typename Dynamics>
 class RecidingHorizonController {
  public:
-  RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics) : dynamics_(dynamics);
+  RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics);
   ~RecidingHorizonController();
 
   void roll(const std::size_t n);
@@ -30,7 +36,9 @@ class RecidingHorizonController {
   void setChaseWeights();
   void setPositioningWeights();
   void setMap(const nav2_costmap_2d::Costmap2D* map);
-  void setFinalState(const geometry_msgs::msg::PoseStamped& pose);
+  void setState(const geometry_msgs::msg::PoseStamped& pose_start,
+                const geometry_msgs::msg::Twist& twist_start,
+                const geometry_msgs::msg::PoseStamped& pose_end);
   void setNIter(const std::size_t max_iter);
 
   nav_msgs::msg::Path getPath(const std::size_t granulaty);
@@ -44,8 +52,8 @@ class RecidingHorizonController {
 
   ifopt::Problem nlp_;
   ifopt::IpoptSolver ipopt_;
-  std::make_shared<controller_nlp::ControllerConstraint> constraint_;
-  std::make_shared<controller_nlp::ControllerCost> cost_;
+  std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
+  std::shared_ptr<controller_nlp::ControllerCost> cost_;
 };
 
 };  // namespace receding_horizon_controller

@@ -16,6 +16,7 @@ struct RobotDynamics {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   static constexpr int nst_ext = nst + 1;
   static constexpr int npsi = nst + nctr;
+  typedef Eigen::Matrix<number_t, nst, Eigen::Dynamic, Eigen::ColMajor> MatrixState;
   typedef Eigen::Matrix<number_t, nst_ext, Eigen::Dynamic, Eigen::ColMajor> MatrixStateExt;
   typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixControl;
   typedef Eigen::Matrix<number_t, npsi, Eigen::Dynamic, Eigen::ColMajor> MatrixPsi;
@@ -27,15 +28,15 @@ struct RobotDynamics {
   typedef Eigen::DiagonalMatrix<number_t, nst_ext> MatrixWeightsExt;
   typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixGrad;
 
-  RobotDynamics(const number_t dt) : dt_(dt), {};
+  RobotDynamics(const number_t dt) : dt_(dt){};
 
-  inline MatrixState rk4(const MatrixControl& u) { return rk4(u, x0_, xf_).topRows(nst); }
+  inline MatrixState rk4(const MatrixControl& u) { return rk4Ext(u, x0_, xf_).topRows(nst); }
 
   inline number_t getCost(const MatrixControl& u) { return getCost(x0_, xf_, u); }
 
   inline number_t getCost(const VectorStateExt& x0, const VectorStateExt& xf,
                           const MatrixControl& u) {
-    MatrixStateExt x = rk4(u, x0, xf);
+    MatrixStateExt x = rk4Ext(u, x0, xf);
     return costFun(x, xf, u);
   };
 
@@ -43,13 +44,13 @@ struct RobotDynamics {
 
   inline MatrixGrad getGradient(const VectorStateExt& x0, const VectorStateExt& xf,
                                 const MatrixControl& u) {
-    MatrixStateExt x = rk4(u, x0, xf);
+    MatrixStateExt x = rk4Ext(u, x0, xf);
 
     VectorPsi psi_f = VectorPsi::Zero();
     psi_f.head(xf.rows()) = -dqDx(x.col(x.cols() - 1), xf);
 
     MatrixPsi psi_out = MatrixPsi(psi_f.rows(), u.cols());
-    rk4Psi(x, u, psi_f, psi_out);
+    rk4ExtPsi(x, u, psi_f, psi_out);
 
     MatrixGrad phi_integrated = psi_out.block(psi_out.rows() - u.rows(), 0, u.rows(), u.cols());
     MatrixGrad g(u.rows(), u.cols());
@@ -91,10 +92,10 @@ struct RobotDynamics {
   VectorStateExt xf_;
 
  private:
-  inline MatrixStateExt rk4(const MatrixControl& u) { return rk4(u, x0_, xf_); }
+  inline MatrixStateExt rk4Ext(const MatrixControl& u) { return rk4Ext(u, x0_, xf_); }
 
-  inline MatrixStateExt rk4(const MatrixControl& u, const VectorStateExt& x0,
-                            const VectorStateExt& xf) {
+  inline MatrixStateExt rk4Ext(const MatrixControl& u, const VectorStateExt& x0,
+                               const VectorStateExt& xf) {
     MatrixStateExt x_out(x0.rows(), u.cols());
     x_out.col(0) = x0;
     for (Eigen::Index i = 0; i < u.cols() - 1; i++) {
@@ -111,8 +112,8 @@ struct RobotDynamics {
     return x_out;
   };
 
-  void rk4Psi(const MatrixStateExt& x, const MatrixControl& u, const VectorPsi& psi_f,
-              MatrixPsi& psi_out) {
+  void rk4ExtPsi(const MatrixStateExt& x, const MatrixControl& u, const VectorPsi& psi_f,
+                 MatrixPsi& psi_out) {
     assert(u.cols() == psi_out.cols());
     assert(u.cols() == x.cols());
 

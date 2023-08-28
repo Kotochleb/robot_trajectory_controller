@@ -18,6 +18,8 @@
   <depend>nav2_msgs</depend>
   <depend>pluginlib</depend>
   <depend>tf2</depend>
+  <depend>ifopt</depend>
+  <depend>eigen</depend>
 
   <exec_depend>nav2_bringup</exec_depend>
 

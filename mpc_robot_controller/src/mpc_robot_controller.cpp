@@ -7,10 +7,10 @@
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/node_utils.hpp"
 
-#include <diff_drive_dynamics.hpp>
-#include <receding_horizon_controller.hpp>
-#include <robot_dynamics.hpp>
-#include <utils.hpp>
+#include <mpc_robot_controller/diff_drive_dynamics.hpp>
+#include <mpc_robot_controller/receding_horizon_controller.hpp>
+#include <mpc_robot_controller/robot_dynamics.hpp>
+#include <mpc_robot_controller/utils.hpp>
 
 using nav2_util::geometry_utils::euclidean_distance;
 using std::abs;
@@ -20,10 +20,9 @@ using std::min;
 
 namespace mpc_robot_controller {
 
-void MPCRobotController::configure(
-    const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent, std::string name,
-    const std::shared_ptr<tf2_ros::Buffer>& tf,
-    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>& costmap_ros) {
+void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
+                                   std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+                                   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) {
 
   node_ = parent;
   auto node = node_.lock();
@@ -39,32 +38,32 @@ void MPCRobotController::configure(
   const auto lim_dacc_pref = plugin_name_ + ".limits.deceleration";
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".time_steps",
-                                               rclcpp::ParameterValue(50));
+                                               rclcpp::ParameterValue(int(50)));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".model_dt",
-                                               rclcpp::ParameterValue(0.1));
+                                               rclcpp::ParameterValue(double(0.1)));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".max_iter",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(int(20)));
 
   nav2_util::declare_parameter_if_not_declared(node, lim_vel_pref + ".forward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_vel_pref + ".backward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_vel_pref + ".angular",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
 
   nav2_util::declare_parameter_if_not_declared(node, lim_acc_pref + ".forward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_acc_pref + ".backward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_acc_pref + ".angnular",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
 
   nav2_util::declare_parameter_if_not_declared(node, lim_dacc_pref + ".forward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_dacc_pref + ".backward",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
   nav2_util::declare_parameter_if_not_declared(node, lim_dacc_pref + ".angnular",
-                                               rclcpp::ParameterValue(20));
+                                               rclcpp::ParameterValue(double(20)));
 
   node->get_parameter(plugin_name_ + ".time_steps", time_steps_);
   node->get_parameter(plugin_name_ + ".model_dt", mode_dt_);
@@ -113,31 +112,34 @@ void MPCRobotController::deactivate() {
 }
 
 geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
-    const geometry_msgs::msg::PoseStamped& pose, const geometry_msgs::msg::Twist& twist) {
+    const geometry_msgs::msg::PoseStamped& pose, const geometry_msgs::msg::Twist& twist,
+    [[maybe_unused]] nav2_core::GoalChecker* goal_checker) {
 
   auto transformed_plan = transformGlobalPlan(pose);
   const auto map = std::make_unique<nav2_costmap_2d::Costmap2D>(costmap_ros_->getCostmap());
 
   const std::size_t n = std::size_t(getTimeToEscapeMap(std::abs(twist.linear.x)) / mode_dt_) + 1;
 
-  if (isInsideMap(transformed_plan.poses.back().pose.position)) {
-    rhc_->setPositioningWeights();
-  } else {
-    rhc_->setChaseWeights();
-  }
+  // const auto & goal = transformed_plan.poses.back();
+  // if (isInsideMap(goal.pose.position)) {
+  //   rhc_->setPositioningWeights();
+  // } else {
+  //   rhc_->setChaseWeights();
+  // }
 
+  // rhc_->setState(pose, twist, goal);
   rhc_->roll(n);
   rhc_->predict(n);
   rhc_->generatePath();
 
-  const auto path = rhc->getPath(n);
+  const auto path = rhc_->getPath(n);
   local_pub_->publish(path);
 
   // Create and publish a TwistStamped message with the desired velocity
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist = rhc->getVelocityCommand();
+  cmd_vel.twist = rhc_->getVelocityCommand();
 
   return cmd_vel;
 }
@@ -146,7 +148,7 @@ void MPCRobotController::setPlan(const nav_msgs::msg::Path& path) {
   global_plan_ = path;
 }
 
-void setSpeedLimit(const double& speed_limit, const bool& percentage){};
+void MPCRobotController::setSpeedLimit([[maybe_unused]] const double& speed_limit, [[maybe_unused]] const bool& percentage){};
 
 }  // namespace mpc_robot_controller
 

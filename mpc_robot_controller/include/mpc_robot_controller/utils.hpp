@@ -23,26 +23,7 @@ Iter min_by(Iter begin, Iter end, Getter getCompareVal) {
   return lowest_it;
 }
 
-double getTimeToEscapeMap(const double velocity) {
-  const nav2_costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
-  const double circ_r = std::max(costmap->getSizeInMetersX, costmap->getSizeInMetersY);
-
-  if (std::fabs(velocity - velocity_lim_.forward) <= std::numeric_limits<double>::epsilon()) {
-    return circ_r / velocity;
-  }
-  const double acc_dist =
-      std::pow(velocity_lim_.forward - velocity, 2) / (2.0 * acceleration_lim_.forward);
-  if (acc_dist > circ_r) {
-    const doucble acc_time = (velocity_lim_.forward - velocity) / acceleration_lim_.forward;
-    const doucble max_speed_time = (circ_r - acc_dist) / velocity_lim_.forward;
-    return acc_time + max_speed_time;
-  } else {
-    const auto delta = std::sqrt(std::pow(velocity, 2) + 2.0 * acceleration_lim_.forward * circ_r);
-    return (-velocity + delta) / acceleration_lim_.forward;
-  }
-}
-
-bool isInsideMap(const geometry_msgs::msg::Pose& pose) {
+bool isInsideMap([[maybe_unused]] const geometry_msgs::msg::Pose& pose) {
   return false;
 }
 
@@ -66,16 +47,18 @@ nav_msgs::msg::Path MPCRobotController::transformGlobalPlan(
                           costmap->getResolution() / 2.0;
 
   // First find the closest pose on the path to the robot
-  auto transformation_begin = min_by(global_plan_.poses.begin(), global_plan_.poses.end(),
-                                     [&robot_pose](const geometry_msgs::msg::PoseStamped& ps) {
-                                       return euclidean_distance(robot_pose, ps);
-                                     });
+  auto transformation_begin =
+      min_by(global_plan_.poses.begin(), global_plan_.poses.end(),
+             [&robot_pose](const geometry_msgs::msg::PoseStamped& ps) {
+               return nav2_util::geometry_utils::euclidean_distance(robot_pose, ps);
+             });
 
   // From the closest point, look for the first point that's further then dist_threshold from the
   // robot. These points are definitely outside of the costmap so we won't transform them.
   auto transformation_end = std::find_if(
       transformation_begin, end(global_plan_.poses), [&](const auto& global_plan_pose) {
-        return euclidean_distance(robot_pose, global_plan_pose) > dist_threshold;
+        return nav2_util::geometry_utils::euclidean_distance(robot_pose, global_plan_pose) >
+               dist_threshold;
       });
 
   // Helper function for the transform below. Transforms a PoseStamped from global frame to local
@@ -100,7 +83,7 @@ nav_msgs::msg::Path MPCRobotController::transformGlobalPlan(
   // Remove the portion of the global plan that we've already passed so we don't
   // process it on the next iteration (this is called path pruning)
   global_plan_.poses.erase(begin(global_plan_.poses), transformation_begin);
-  global_pub_->publish(transformed_plan);
+  local_pub_->publish(transformed_plan);
 
   if (transformed_plan.poses.empty()) {
     throw nav2_core::PlannerException("Resulting plan has 0 poses in it.");
