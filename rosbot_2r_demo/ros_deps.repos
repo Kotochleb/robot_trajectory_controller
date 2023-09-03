@@ -2,4 +2,4 @@ repositories:
   vcs/rosbot_ros:
     type: git
     url: https://github.com/husarion/rosbot_ros
-    version: humble-update-simulation-dependencies
+    version: humble

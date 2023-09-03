@@ -6,8 +6,6 @@
 
 namespace robot_dynamics {
 
-typedef double number_t;
-
 // nst is number of state variables
 // nctr is number of control inputs
 template <class Derived, int nst, int nctr>
@@ -16,26 +14,26 @@ struct RobotDynamics {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   static constexpr int nst_ext = nst + 1;
   static constexpr int npsi = nst + nctr;
-  typedef Eigen::Matrix<number_t, nst, Eigen::Dynamic, Eigen::ColMajor> MatrixState;
-  typedef Eigen::Matrix<number_t, nst_ext, Eigen::Dynamic, Eigen::ColMajor> MatrixStateExt;
-  typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixControl;
-  typedef Eigen::Matrix<number_t, npsi, Eigen::Dynamic, Eigen::ColMajor> MatrixPsi;
-  typedef Eigen::Matrix<number_t, nst_ext, 1> VectorStateExt;
-  typedef Eigen::Matrix<number_t, nst, 1> VectorState;
-  typedef Eigen::Matrix<number_t, nctr, 1> VectorControl;
-  typedef Eigen::Matrix<number_t, npsi, 1> VectorPsi;
-  typedef Eigen::DiagonalMatrix<number_t, nst> MatrixWeights;
-  typedef Eigen::DiagonalMatrix<number_t, nst_ext> MatrixWeightsExt;
-  typedef Eigen::Matrix<number_t, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixGrad;
+  typedef Eigen::Matrix<double, nst, Eigen::Dynamic, Eigen::ColMajor> MatrixState;
+  typedef Eigen::Matrix<double, nst_ext, Eigen::Dynamic, Eigen::ColMajor> MatrixStateExt;
+  typedef Eigen::Matrix<double, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixControl;
+  typedef Eigen::Matrix<double, npsi, Eigen::Dynamic, Eigen::ColMajor> MatrixPsi;
+  typedef Eigen::Matrix<double, nst_ext, 1> VectorStateExt;
+  typedef Eigen::Matrix<double, nst, 1> VectorState;
+  typedef Eigen::Matrix<double, nctr, 1> VectorControl;
+  typedef Eigen::Matrix<double, npsi, 1> VectorPsi;
+  typedef Eigen::DiagonalMatrix<double, nst> MatrixWeights;
+  typedef Eigen::DiagonalMatrix<double, nst_ext> MatrixWeightsExt;
+  typedef Eigen::Matrix<double, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixGrad;
 
-  RobotDynamics(const number_t dt) : dt_(dt){};
+  RobotDynamics(const double dt) : dt_(dt){};
 
   inline MatrixState rk4(const MatrixControl& u) { return rk4Ext(u, x0_, xf_).topRows(nst); }
 
-  inline number_t getCost(const MatrixControl& u) { return getCost(x0_, xf_, u); }
+  inline double getCost(const MatrixControl& u) { return getCost(x0_, xf_, u); }
 
-  inline number_t getCost(const VectorStateExt& x0, const VectorStateExt& xf,
-                          const MatrixControl& u) {
+  inline double getCost(const VectorStateExt& x0, const VectorStateExt& xf,
+                        const MatrixControl& u) {
     MatrixStateExt x = rk4Ext(u, x0, xf);
     return costFun(x, xf, u);
   };
@@ -54,8 +52,9 @@ struct RobotDynamics {
 
     MatrixGrad phi_integrated = psi_out.block(psi_out.rows() - u.rows(), 0, u.rows(), u.cols());
     MatrixGrad g(u.rows(), u.cols());
-    for (Eigen::Index i = 1; i < phi_integrated.cols(); i++) {
-      g.col(i) = phi_integrated.col(i - 1) - phi_integrated.col(i);
+
+    for (Eigen::Index i = 0; i < phi_integrated.cols(); i++) {
+      g.col(i) = -getDPsi(x.col(i), u.col(i), psi_out.col(i)).tail(nctr);
     }
     return g;
   };
@@ -63,8 +62,8 @@ struct RobotDynamics {
   inline void setupState(const VectorState& x0, const VectorState& xf) {
     x0_.head(nst) = x0;
     xf_.head(nst) = xf;
-    x0_[nst_ext - 1] = 0.0;
-    xf_[nst_ext - 1] = 0.0;
+    x0_.tail(1).setZero();
+    xf_.tail(1).setZero();
   }
 
   inline MatrixControl getInitialValues(const int N) {
@@ -78,15 +77,16 @@ struct RobotDynamics {
 
   inline void setWeightMatrix(const MatrixWeights& W) {
     W_.diagonal().head(nst) = W.diagonal();
-    W_.diagonal()[nst] = 0.0;
+    W_.diagonal().tail(1).setZero();
   }
+
   constexpr int getNStateVar() { return nst; }
   constexpr int getNExtStateVar() { return nst_ext; }
   constexpr int getNControlVar() { return nctr; }
   constexpr int getNPsiVar() { return npsi; }
 
  protected:
-  const number_t dt_;
+  const double dt_;
   MatrixWeightsExt W_;
   VectorStateExt x0_;
   VectorStateExt xf_;
@@ -135,8 +135,8 @@ struct RobotDynamics {
     };
   };
 
-  inline number_t q(const VectorStateExt& x, const VectorStateExt& xf) {
-    return static_cast<Derived*>(this)->q(x, xf);
+  inline double q(const VectorStateExt& x, const VectorStateExt& xf, const VectorControl& u) {
+    return static_cast<Derived*>(this)->q(x, xf, u);
   };
 
   inline VectorStateExt getDX(const VectorStateExt& x, const VectorStateExt& xf,
@@ -149,8 +149,8 @@ struct RobotDynamics {
     return static_cast<Derived*>(this)->getDPsi(x, u, p);
   };
 
-  inline number_t costFun(const MatrixStateExt& x_out, const VectorStateExt& xf,
-                          const MatrixControl& u) {
+  inline double costFun(const MatrixStateExt& x_out, const VectorStateExt& xf,
+                        const MatrixControl& u) {
     return static_cast<Derived*>(this)->costFun(x_out, xf, u);
   };
 

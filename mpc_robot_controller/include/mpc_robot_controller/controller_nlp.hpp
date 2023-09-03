@@ -30,7 +30,7 @@ class ControllerVariables : public ifopt::VariableSet {
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
-    const auto bound = ifopt::Bounds(-0.3, 0.3);
+    const auto bound = ifopt::Bounds(-1.0, 1.0);
     bounds.assign(bounds.size(), bound);
     return bounds;
   }

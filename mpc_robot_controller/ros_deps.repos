@@ -1,5 +1,9 @@
 repositories:
   vcs/ifopt:
     type: git
-    url: https://github.com/ethz-adrl/ifopt
+    url: https://github.com/ethz-adrl/ifopt/
     version: master
+  vcs/nav2:
+    type: git
+    url: https://github.com/ros-planning/navigation2.git
+    version: 1.1.8

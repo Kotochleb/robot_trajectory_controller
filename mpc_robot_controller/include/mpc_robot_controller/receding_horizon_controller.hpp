@@ -27,8 +27,9 @@ using Dynamics = diff_drive_dynamics::DiffDriveDynamics;
 // template <typename Dynamics>
 class RecidingHorizonController {
  public:
-  RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics);
-  ~RecidingHorizonController();
+  RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics,
+                            const std::size_t max_horizon, const std::size_t max_iter,
+                            const double max_cpu_time);
 
   void roll(const std::size_t n);
   void predict(const std::size_t n);
@@ -36,24 +37,26 @@ class RecidingHorizonController {
   void setChaseWeights();
   void setPositioningWeights();
   void setMap(const nav2_costmap_2d::Costmap2D* map);
-  void setState(const geometry_msgs::msg::PoseStamped& pose_start,
-                const geometry_msgs::msg::Twist& twist_start,
-                const geometry_msgs::msg::PoseStamped& pose_end);
+  void setState(const geometry_msgs::msg::Twist& twist_start,
+                const geometry_msgs::msg::PoseStamped& pose_end,
+                const geometry_msgs::msg::Twist& twist_end);
   void setNIter(const std::size_t max_iter);
 
-  nav_msgs::msg::Path getPath(const std::size_t granulaty);
   geometry_msgs::msg::Twist getVelocityCommand();
+  nav_msgs::msg::Path getPath(const std::size_t granulaty);
 
  private:
-  std::size_t max_iter_;
   std::shared_ptr<Dynamics> dynamics_;
+  std::size_t max_horizon_;
+  std::size_t max_iter_;
+
   Dynamics::MatrixState x_;
   Dynamics::MatrixControl u_;
 
-  ifopt::Problem nlp_;
   ifopt::IpoptSolver ipopt_;
-  std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
   std::shared_ptr<controller_nlp::ControllerCost> cost_;
+  std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
+  std::shared_ptr<controller_nlp::ControllerVariables> variables_;
 };
 
 };  // namespace receding_horizon_controller

@@ -31,7 +31,7 @@ bt_navigator:
     - nav2_time_expired_condition_bt_node
     - nav2_distance_traveled_condition_bt_node
     - nav2_remove_passed_goals_action_bt_node
-    - nav2_compute_path_through_poses_action_bt_node
+    - nav2_compute_path_through_poses_action_bt_node 
 
 bt_navigator_rclcpp_node:
   ros__parameters:
@@ -41,10 +41,8 @@ bt_navigator_rclcpp_node:
 controller_server:
   ros__parameters:
     use_sim_time: true
-    controller_frequency: 10.0
-    min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
+    controller_frequency: 5.0
+    odom_topic: "/odometry/filtered"
     progress_checker_plugin: "progress_checker"
     goal_checker_plugin: "goal_checker"
     controller_plugins: ["FollowPath"]
@@ -60,56 +58,17 @@ controller_server:
       xy_goal_tolerance: 0.1
       yaw_goal_tolerance: 0.15
       stateful: True
-    # DWB parameters
     FollowPath:
-      # Shim controller first rotates robot in place to orientation of global path
-      # and the switches to DWB - otherwise DWB won't turn in place, but with arc, which
-      # is less optimal
-      plugin: "nav2_rotation_shim_controller::RotationShimController"
-      primary_controller: "dwb_core::DWBLocalPlanner"
-      angular_dist_threshold: 0.7 # quite low value to avoid moving in arc
-      forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 1.5
-      max_angular_accel: 4.0
-      simulate_ahead_time: 1.0
-
-      debug_trajectory_details: True
-      min_vel_x: 0.0
-      min_vel_y: 0.0
-      max_vel_x: 0.32
-      max_vel_y: 0.0
-      max_vel_theta: 1.0
-      min_speed_xy: 0.007
-      max_speed_xy: 0.40
-      min_speed_theta: 0.0
-      acc_lim_x: 2.0
-      acc_lim_y: 0.0
-      acc_lim_theta: 3.2
-      decel_lim_x: -2.0
-      decel_lim_y: 0.0
-      decel_lim_theta: -3.2
-      vx_samples: 20
-      vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 2.5
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 1.0
-      xy_goal_tolerance: 0.1 
-      trans_stopped_velocity: 0.25
-      short_circuit_trajectory_evaluation: True
-      stateful: True
-      critics: ["BaseObstacle", "ObstacleFootprint", "GoalAlign", "GoalDist", "PathAlign", "PathDist", "RotateToGoal", "Oscillation"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      GoalAlign.scale: 24.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
+      plugin: "mpc_robot_controller::MPCRobotController"
+      time_steps: 20
+      max_iter: 10000
+      model_dt: 0.1
+      limits:
+        velocity:
+          forward: 1.0
+          backward: 1.0
+          angular: 3.14
+        acceleration: 1.0
 
 controller_server_rclcpp_node:
   ros__parameters:
@@ -167,8 +126,8 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
+      update_frequency: 0.2
+      publish_frequency: 0.2
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: true
@@ -204,15 +163,26 @@ global_costmap:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 10.0
-    use_sim_time: False
     planner_plugins: ["GridBased"]
+    update_frequency: 0.2
+    use_sim_time: True
+
     GridBased:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
-      how_many_corners: 8
-      w_euc_cost: 1.0
-      w_traversal_cost: 10.0
-      w_heuristic_cost: 1.0
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.125                      # tolerance for planning if unable to reach exact pose, in meters
+      downsample_costmap: false             # whether or not to downsample the map
+      downsampling_factor: 1                # multiplier for the resolution of the costmap layer (e.g. 2 on a 5cm costmap would be 10cm)
+      allow_unknown: true                   # allow traveling in unknown space
+      max_iterations: 20000               # maximum total iterations to search for before failing (in case unreachable), set to -1 to disable
+      max_on_approach_iterations: 1000      # maximum number of iterations to attempt to reach goal once in tolerance
+      max_planning_time: 3.0                # max time in s for planner to plan, smooth
+      cost_travel_multiplier: 10.0        # Cost multiplier to apply to search to steer away from high cost areas. Larger values will place in the center of aisles more exactly (if non-`FREE` cost potential field exists) but take slightly longer to compute. To optimize for speed, a value of 1.0 is reasonable. A reasonable tradeoff value is 2.0. A value of 0.0 effective disables steering away from obstacles and acts like a naive binary search A*.
+      use_final_approach_orientation: false # Whether to set the final path pose at the goal's orientation to the requested orientation (false) or in line with the approach angle so the robot doesn't rotate to heading (true)
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 0.00000001
 
 planner_server_rclcpp_node:
   ros__parameters:

@@ -85,7 +85,9 @@
         "climits": "cpp",
         "valarray": "cpp",
         "*.ipp": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "*.txx": "cpp",
+        "hash_set": "cpp"
     },
     "python.analysis.extraPaths": [
         "/opt/ros/humble/lib/python3.8/site-packages/"
