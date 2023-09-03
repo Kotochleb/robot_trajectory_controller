@@ -107,8 +107,8 @@ nav_msgs::msg::Path RecidingHorizonController::getPath(
 
 geometry_msgs::msg::Twist RecidingHorizonController::getVelocityCommand() {
   geometry_msgs::msg::Twist twist;
-  twist.linear.x = x_.row(0)[1];
-  twist.angular.z = x_.row(3)[1];
+  twist.linear.x = x_.row(0)[2];
+  twist.angular.z = x_.row(3)[2];
   return twist;
 }
 
