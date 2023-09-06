@@ -1,7 +1,10 @@
 #ifndef __DIFF_DRIVE_DYNAMICS_HPP__
 #define __DIFF_DRIVE_DYNAMICS_HPP__
 
+#include <array>
 #include <cmath>
+#include <numeric>
+#include <vector>
 
 #include <Eigen/Dense>
 
@@ -21,13 +24,6 @@ struct DiffDriveParams {
   double wheel_radius;
 };
 
-struct CostMap {
-  double resolution;
-  unsigned cells_x;
-  unsigned cells_y;
-  unsigned char* map;
-};
-
 using robot_dynamics::RobotDynamics;
 static constexpr int state_variables = 5;
 static constexpr int control_inputs = 2;
@@ -37,7 +33,8 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   friend class RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>;
   DiffDriveDynamics(const DiffDriveParams& params)
       : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>(params.dt),
-        parmas_(params){
+        parmas_(params),
+        rm_(0){
 
         };
 
@@ -46,12 +43,41 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     return out;
   };
 
+  inline void setSigmaMap(const robot_dynamics::CostMap& map, const double sigma) {
+    sigma_map_pow_ = std::pow(map.resolution * sigma, 2.0);
+  }
+
+  // compute the cost related to the map
+  inline void generateReducedCostmap(const robot_dynamics::CostMap& map) {
+    rm_.clear();
+
+    // handle cases of odd and even number of cells
+    const double offset_x = -static_cast<double>(map.cells_x / 2) + (map.cells_x % 2 ? 0.5 : 0.0);
+    const double offset_y = -static_cast<double>(map.cells_y / 2) + (map.cells_y % 2 ? 0.5 : 0.0);
+
+    const auto threshold = map.thresh;
+    const auto cmp = [threshold](const unsigned char v) {
+      return v >= threshold;
+    };
+
+    const auto begin = map.map;
+    const auto end = begin + map.cells_x * map.cells_y;
+    auto it = begin;
+    while ((it = std::find_if(it, end, cmp)) != end) {
+      const int dist = std::distance(begin, it);
+      const double y_idx = (dist / map.cells_y);
+      const double x_idx = (dist - map.cells_y * y_idx);
+      const double y = (y_idx + offset_x) * map.resolution;
+      const double x = (x_idx + offset_y) * map.resolution;
+      rm_.push_back({x, y});
+      it++;
+    };
+  }
+
   inline double getVelocityForwardLimit() { return parmas_.velocity.forward; };
   inline double getVelocityBackwardLimit() { return parmas_.velocity.backward; };
   inline double getVelocityAngularLimit() { return parmas_.velocity.angular; };
   inline double getAccelerationLimit() { return parmas_.acceleration; };
-
-  inline void setMap(const CostMap& map) { map_ = map; }
 
  private:
   inline MatrixControl getInitialValues(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
@@ -90,15 +116,13 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   inline double q(const VectorStateExt& x, const VectorStateExt& xf, const VectorControl& u) {
 
     const VectorStateExt dx_end = dXF(x, xf);
-    const double map_cost = getCostmapCost(x, map_, sigma_);
-    // return dx_end.transpose() * W_ * dx_end + x[5] + map_cost;
+    // do not compute if empty array
+    const double map_cost = rm_.size() ? 100.0 * getCostmapCost(x, rm_, sigma_map_pow_) : 0.0;
     return 50.0 * (pow(u[0], 2) + pow(u[1], 2)) +
            20.0 * (std::pow(dx_end[1], 2) + std::pow(dx_end[2], 2)) + map_cost;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
-    // VectorStateExt dq;
-    // dq.noalias() -= xf;
     VectorStateExt dq = dXF(x, xf);
     return W_ * dq;
   }
@@ -115,46 +139,30 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   inline VectorStateExt dXF(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dxf = x;
     dxf.head(4).noalias() -= xf.head(4);
-    // dxf[4] = atan2(sin(x[4] - xf[4]), cos(x[4] - xf[4]));
-    dxf[4] = x[4] - xf[4];
+    dxf[4] = atan2(sin(x[4] - xf[4]), cos(x[4] - xf[4]));
+    // dxf[4] = x[4] - xf[4];
     dxf[5] = 0.0;
     return dxf;
   }
 
   // compute the cost related to the map
   inline double getCostmapCost([[maybe_unused]] const VectorStateExt& xk,
-                               [[maybe_unused]] const CostMap& map,
-                               [[maybe_unused]] const double sigma) {
-    return 0.0;
-    // const double x = xk[1];
-    // const double y = xk[2];
-    // const double sigma_map_pow = std::pow(map.resolution * sigma, 2.0);
-    // const double coef = 1 / std::sqrt(2.0 * M_PI * sigma_map_pow);
-    // const double exp_coef = -0.5 / (sigma_map_pow);
-    // // handle cases of odd and even number of cells
-    // const double grid_offset_x = map.cells_x % 2 ? 0.0 : 0.5;
-    // const double grid_offset_y = map.cells_y % 2 ? 0.0 : 0.5;
-
-    // double acc = 0.0;
-
-    // const int mcx = static_cast<int>(map.cells_x);
-    // const int mcy = static_cast<int>(map.cells_y);
-    // for (int iy = -mcy / 2; iy < mcy / 2; iy++) {
-    //   for (int ix = -mcx / 2; ix < mcx; ix++) {
-    //     const double map_x_dist = x - (ix + grid_offset_x) * map.resolution;
-    //     const double map_y_dist = y - (iy + grid_offset_y) * map.resolution;
-    //     const double square_dist = map_x_dist * map_x_dist + map_y_dist * map_y_dist;
-    //     const int map_idx = (iy + mcy) * mcx + (ix + mcx);
-    //     const double wi = static_cast<double>(map.map[map_idx]) / 100.0;
-    //     acc += wi * std::exp(exp_coef * square_dist);
-    //   }
-    // }
-    // return acc * coef;
+                               [[maybe_unused]] const robot_dynamics::ReduceMap& rm,
+                               [[maybe_unused]] const double sigma_map_pow) {
+    const double coef = 1.0 / std::sqrt(2.0 * M_PI * sigma_map_pow);
+    const double exp_coef = -0.5 / (sigma_map_pow);
+    const auto cost = [xk, exp_coef](const double s, const robot_dynamics::MapPoint& p) {
+      const double x = p.first - xk[1];
+      const double y = p.second - xk[2];
+      const double square_dist = x * x + y * y;
+      return s + std::exp(exp_coef * square_dist);
+    };
+    return std::accumulate(rm.begin(), rm.end(), 0.0, cost) * coef;
   }
 
-  const double sigma_ = 5.0;
+  double sigma_map_pow_;
   const DiffDriveParams parmas_;
-  CostMap map_;
+  robot_dynamics::ReduceMap rm_;
 };
 
 };  // namespace diff_drive_dynamics

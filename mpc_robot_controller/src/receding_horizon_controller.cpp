@@ -19,7 +19,6 @@
 #include <mpc_robot_controller/diff_drive_dynamics.hpp>
 #include <mpc_robot_controller/robot_dynamics.hpp>
 
-
 namespace receding_horizon_controller {
 
 RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics,
@@ -40,6 +39,18 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
   ipopt_.SetOption("warm_start_init_point", "yes");
   // ipopt_.SetOption("nlp_scaling_method", "gradient-based");
 };
+
+void RecidingHorizonController::setMap([[maybe_unused]] const nav2_costmap_2d::Costmap2D* costmap) {
+  robot_dynamics::CostMap robot_map;
+  robot_map.thresh = 254;
+  robot_map.resolution = costmap->getResolution();
+  robot_map.cells_x = costmap->getSizeInCellsX();
+  robot_map.cells_y = costmap->getSizeInCellsY();
+  robot_map.map = costmap->getCharMap();
+
+  dynamics_->setSigmaMap(robot_map, 1.5);
+  dynamics_->generateReducedCostmap(robot_map);
+}
 
 void RecidingHorizonController::roll(const std::size_t n) {
   const Eigen::Index c = u_.cols();
@@ -131,8 +142,6 @@ void RecidingHorizonController::setPositioningWeights() {
   W.diagonal()[4] = 100000.0;
   dynamics_->setWeightMatrix(W);
 }
-
-void RecidingHorizonController::setMap([[maybe_unused]] const nav2_costmap_2d::Costmap2D* map) {}
 
 void RecidingHorizonController::setState(const geometry_msgs::msg::Twist& twist_start,
                                          const geometry_msgs::msg::PoseStamped& pose_end,

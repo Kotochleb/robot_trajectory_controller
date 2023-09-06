@@ -6,6 +6,17 @@
 
 namespace robot_dynamics {
 
+struct CostMap {
+  double resolution;
+  unsigned cells_x;
+  unsigned cells_y;
+  unsigned char thresh;
+  unsigned char* map;
+};
+
+using MapPoint = std::pair<double, double>;
+using ReduceMap = std::vector<MapPoint>;
+
 // nst is number of state variables
 // nctr is number of control inputs
 template <class Derived, int nst, int nctr>
@@ -78,6 +89,14 @@ struct RobotDynamics {
   inline void setWeightMatrix(const MatrixWeights& W) {
     W_.diagonal().head(nst) = W.diagonal();
     W_.diagonal().tail(1).setZero();
+  }
+
+  inline void setSigmaMap(const CostMap& map, const double sigma) {
+    static_cast<Derived*>(this)->setSigmaMap(map, sigma);
+  }
+
+  inline void generateReducedCostmap(const CostMap& map) {
+    static_cast<Derived*>(this)->generateReducedCostmap(map);
   }
 
   constexpr int getNStateVar() { return nst; }

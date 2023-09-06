@@ -117,17 +117,9 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   geometry_msgs::msg::PoseStamped goal;
   tf_->transform(getGoal(pose), goal, "base_link", transform_tolerance_);
 
-  const auto costmap = costmap_ros_->getCostmap();
-
-  diff_drive_dynamics::CostMap robot_map;
-  robot_map.resolution = costmap->getResolution();
-  robot_map.cells_x = costmap->getSizeInCellsX();
-  robot_map.cells_y = costmap->getSizeInCellsY();
-  robot_map.map = costmap->getCharMap();
-  rd_->setMap(robot_map);
-
   geometry_msgs::msg::Twist goal_twist;
 
+  const auto costmap = costmap_ros_->getCostmap();
   const auto thresh = (costmap->getSizeInMetersX() + costmap->getSizeInMetersY()) / 2.0 * 0.8;
   if (std::hypot(goal.pose.position.x, goal.pose.position.y) > thresh * 0.6) {
     rhc_->setChaseWeights();
@@ -137,6 +129,7 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   }
 
   rhc_->setState(twist, goal, goal_twist);
+  rhc_->setMap(costmap);
   const auto n = time_steps_;
   rhc_->roll(n);
   rhc_->predict(n);
