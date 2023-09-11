@@ -30,8 +30,10 @@ class ControllerVariables : public ifopt::VariableSet {
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
-    const auto bound = ifopt::Bounds(-1.0, 1.0);
-    bounds.assign(bounds.size(), bound);
+    const auto bound_lin = ifopt::Bounds(-1.0, 1.0);
+    const auto bound_ang = ifopt::Bounds(-M_PI, M_PI);
+    std::fill_n(bounds.begin(), bounds.size() / 2, bound_lin);
+    std::fill_n(bounds.begin() + (bounds.size() / 2), bounds.size() / 2, bound_ang);
     return bounds;
   }
 
@@ -70,14 +72,13 @@ class ControllerCost : public ifopt::CostTerm {
 
   double GetCost() const override {
     const auto vals = GetVariables()->GetComponent("controller_var_set")->GetValues();
-    Dynamics::MatrixControl u(2, vals.rows() / 2);
-    u.row(0) = vals.head(vals.rows() / 2);
-    u.row(1) = vals.tail(vals.rows() / 2);
+    const auto u = vals.reshaped<Eigen::RowMajor>(2, vals.rows() / 2);
     const double cost = dynamics_->getCost(u);
     return cost;
   };
 
-  void FillJacobianBlock(std::string var_set, ifopt::Component::Jacobian& jac) const override {
+  void FillJacobianBlock([[maybe_unused]] std::string var_set,
+                         [[maybe_unused]] ifopt::Component::Jacobian& jac) const override {
     if (var_set == "controller_var_set") {
       const auto vals = GetVariables()->GetComponent("controller_var_set")->GetValues();
       const auto u = vals.reshaped<Eigen::RowMajor>(2, vals.rows() / 2);
@@ -92,6 +93,7 @@ class ControllerCost : public ifopt::CostTerm {
   }
 
  private:
+  Dynamics::MatrixControl u_;
   std::shared_ptr<Dynamics> dynamics_;
 };
 };      // namespace controller_nlp

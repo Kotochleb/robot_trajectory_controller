@@ -24,7 +24,7 @@ namespace receding_horizon_controller {
 RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics,
                                                      const std::size_t max_horizon,
                                                      const std::size_t max_iter,
-                                                     const double max_cpu_time)
+                                                     [[maybe_unused]] const double max_cpu_time)
     : dynamics_(dynamics),
       max_horizon_(max_horizon),
       max_iter_(max_iter),
@@ -34,9 +34,17 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
   cost_ = std::make_shared<controller_nlp::ControllerCost>(dynamics_);
 
   ipopt_.SetOption("max_iter", int(max_iter_));
-  ipopt_.SetOption("print_level", 0);
+  // ipopt_.SetOption("print_level", 0);
   ipopt_.SetOption("max_cpu_time", max_cpu_time);
+  // ipopt_.SetOption("max_wall_time", max_cpu_time);
   ipopt_.SetOption("warm_start_init_point", "yes");
+  ipopt_.SetOption("warm_start_bound_push", 1e-16);
+  ipopt_.SetOption("warm_start_mult_bound_push", 1e-16);
+  ipopt_.SetOption("warm_start_bound_frac", 1e-16);
+  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-16);
+  ipopt_.SetOption("warm_start_slack_bound_push", 1e-16);
+  ipopt_.SetOption("mu_init", 1e-6);
+  // ipopt_.SetOption("warm_start_entire_iterate", "yes");
   // ipopt_.SetOption("nlp_scaling_method", "gradient-based");
 };
 
@@ -48,7 +56,7 @@ void RecidingHorizonController::setMap([[maybe_unused]] const nav2_costmap_2d::C
   robot_map.cells_y = costmap->getSizeInCellsY();
   robot_map.map = costmap->getCharMap();
 
-  dynamics_->setSigmaMap(robot_map, 1.5);
+  dynamics_->setSigmaMap(robot_map, 5.0, 0.3);
   dynamics_->generateReducedCostmap(robot_map);
 }
 
@@ -118,28 +126,28 @@ nav_msgs::msg::Path RecidingHorizonController::getPath(
 
 geometry_msgs::msg::Twist RecidingHorizonController::getVelocityCommand() {
   geometry_msgs::msg::Twist twist;
-  twist.linear.x = x_.row(0)[2];
-  twist.angular.z = x_.row(3)[2];
+  twist.linear.x = x_.row(0)[1];
+  twist.angular.z = x_.row(3)[1];
   return twist;
 }
 
 void RecidingHorizonController::setChaseWeights() {
   Dynamics::MatrixWeights W;
-  W.diagonal()[0] = 10.0;
-  W.diagonal()[1] = 100000.0;
-  W.diagonal()[2] = 100000.0;
+  W.diagonal()[0] = 1.0;
+  W.diagonal()[1] = 10.0;
+  W.diagonal()[2] = 10.0;
   W.diagonal()[3] = 0.0;
-  W.diagonal()[4] = 10000000.0;
+  W.diagonal()[4] = 10.0;
   dynamics_->setWeightMatrix(W);
 }
 
 void RecidingHorizonController::setPositioningWeights() {
   Dynamics::MatrixWeights W;
-  W.diagonal()[0] = 10.0;
-  W.diagonal()[1] = 100000.0;
-  W.diagonal()[2] = 100000.0;
-  W.diagonal()[3] = 10.0;
-  W.diagonal()[4] = 100000.0;
+  W.diagonal()[0] = 0.1;
+  W.diagonal()[1] = 10.0;
+  W.diagonal()[2] = 10.0;
+  W.diagonal()[3] = 0.1;
+  W.diagonal()[4] = 10.0;
   dynamics_->setWeightMatrix(W);
 }
 

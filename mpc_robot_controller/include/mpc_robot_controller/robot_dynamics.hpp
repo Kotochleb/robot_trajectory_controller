@@ -14,7 +14,7 @@ struct CostMap {
   unsigned char* map;
 };
 
-using MapPoint = std::pair<double, double>;
+using MapPoint = std::pair<float, float>;
 using ReduceMap = std::vector<MapPoint>;
 
 // nst is number of state variables
@@ -37,7 +37,7 @@ struct RobotDynamics {
   typedef Eigen::DiagonalMatrix<double, nst_ext> MatrixWeightsExt;
   typedef Eigen::Matrix<double, nctr, Eigen::Dynamic, Eigen::ColMajor> MatrixGrad;
 
-  RobotDynamics(const double dt) : dt_(dt){};
+  RobotDynamics(const double dt) : dt_(dt), dt_2_(dt / 2.0), dt_3_(dt / 3.0), dt_6_(dt / 6.0){};
 
   inline MatrixState rk4(const MatrixControl& u) { return rk4Ext(u, x0_, xf_).topRows(nst); }
 
@@ -64,9 +64,9 @@ struct RobotDynamics {
     MatrixGrad phi_integrated = psi_out.block(psi_out.rows() - u.rows(), 0, u.rows(), u.cols());
     MatrixGrad g(u.rows(), u.cols());
 
-    for (Eigen::Index i = 0; i < phi_integrated.cols(); i++) {
-      g.col(i) = -getDPsi(x.col(i), u.col(i), psi_out.col(i)).tail(nctr);
-    }
+    g.leftCols(phi_integrated.cols() - 1) =
+        phi_integrated.bottomRows(nctr).leftCols(phi_integrated.cols() - 1) -
+        phi_integrated.bottomRows(nctr).rightCols(phi_integrated.cols() - 1);
     return g;
   };
 
@@ -106,6 +106,9 @@ struct RobotDynamics {
 
  protected:
   const double dt_;
+  const double dt_2_;
+  const double dt_3_;
+  const double dt_6_;
   MatrixWeightsExt W_;
   VectorStateExt x0_;
   VectorStateExt xf_;
@@ -117,16 +120,19 @@ struct RobotDynamics {
                                const VectorStateExt& xf) {
     MatrixStateExt x_out(x0.rows(), u.cols());
     x_out.col(0) = x0;
+
     for (Eigen::Index i = 0; i < u.cols() - 1; i++) {
       const auto& uk = u.col(i);
       const auto& xk = x_out.col(i);
 
       const auto k1 = getDX(xk, xf, uk);
-      const auto k2 = getDX(xk + k1 * dt_ / 2.0, xf, uk);
-      const auto k3 = getDX(xk + k2 * dt_ / 2.0, xf, uk);
+      const auto k2 = getDX(xk + k1 * dt_2_, xf, uk);
+      const auto k3 = getDX(xk + k2 * dt_2_, xf, uk);
       const auto k4 = getDX(xk + k3 * dt_, xf, uk);
 
-      x_out.col(i + 1) = xk + (dt_ / 6.0) * (k1 + k4 + 2.0 * (k2 + k3));
+      x_out.col(i + 1) = xk;
+      x_out.col(i + 1).noalias() += dt_6_ * (k1 + k4);
+      x_out.col(i + 1).noalias() += dt_3_ * (k2 + k3);
     }
     return x_out;
   };
@@ -146,11 +152,13 @@ struct RobotDynamics {
       const auto x05 = (xk + xk1) / 2.0;
 
       const auto dp1 = -getDPsi(xk, uk1, pk);
-      const auto dp2 = -getDPsi(x05, uk1, pk + dp1 * dt_ / 2.0);
-      const auto dp3 = -getDPsi(x05, uk1, pk + dp2 * dt_ / 2.0);
+      const auto dp2 = -getDPsi(x05, uk1, pk + dp1 * dt_2_);
+      const auto dp3 = -getDPsi(x05, uk1, pk + dp2 * dt_2_);
       const auto dp4 = -getDPsi(x05, uk1, pk + dp3 * dt_);
 
-      psi_out.col(k - 1) = pk + (dt_ / 6.0) * (dp1 + dp4 + 2.0 * (dp2 + dp3));
+      psi_out.col(k - 1) = pk;
+      psi_out.col(k - 1).noalias() += dt_6_ * (dp1 + dp4);
+      psi_out.col(k - 1).noalias() += dt_3_ * (dp2 + dp3);
     };
   };
 
@@ -177,6 +185,7 @@ struct RobotDynamics {
     return static_cast<Derived*>(this)->dqDx(x, xf);
   };
 };
+
 };  // namespace robot_dynamics
 
 #endif  // __ROBOT_DYNAMICS_HPP__

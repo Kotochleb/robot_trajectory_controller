@@ -75,7 +75,7 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   double controller_frequency;
   node->get_parameter("controller_frequency", controller_frequency);
   // cut off the computation after 80% of the loop time
-  const double max_cpu_time = 1.0 / controller_frequency * 0.8;
+  const double max_cpu_time = (1.0 / controller_frequency) * 0.8;
 
   params.dt = model_dt_;
   rd_ = std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(params);

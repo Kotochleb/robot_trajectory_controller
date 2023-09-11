@@ -24,6 +24,12 @@ struct DiffDriveParams {
   double wheel_radius;
 };
 
+struct MapConstants {
+  float coef;
+  float exp_coef;
+  float inscribed_radious;
+};
+
 using robot_dynamics::RobotDynamics;
 static constexpr int state_variables = 5;
 static constexpr int control_inputs = 2;
@@ -43,8 +49,12 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     return out;
   };
 
-  inline void setSigmaMap(const robot_dynamics::CostMap& map, const double sigma) {
-    sigma_map_pow_ = std::pow(map.resolution * sigma, 2.0);
+  inline void setSigmaMap(const robot_dynamics::CostMap& map, const double sigma,
+                          const double inscribed_radious) {
+    const double sigma_map_pow = std::pow(map.resolution * sigma, 2.0);
+    map_constants_.coef = 1.0 / std::sqrt(2.0 * M_PI * sigma_map_pow);
+    map_constants_.exp_coef = -0.5 / (sigma_map_pow);
+    map_constants_.inscribed_radious = inscribed_radious;
   }
 
   // compute the cost related to the map
@@ -52,12 +62,12 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     rm_.clear();
 
     // handle cases of odd and even number of cells
-    const double offset_x = -static_cast<double>(map.cells_x / 2) + (map.cells_x % 2 ? 0.5 : 0.0);
-    const double offset_y = -static_cast<double>(map.cells_y / 2) + (map.cells_y % 2 ? 0.5 : 0.0);
+    const float offset_x = -static_cast<float>(map.cells_x / 2) + (map.cells_x % 2 ? 0.5 : 0.0);
+    const float offset_y = -static_cast<float>(map.cells_y / 2) + (map.cells_y % 2 ? 0.5 : 0.0);
 
-    const auto threshold = map.thresh;
+    const float threshold = map.thresh;
     const auto cmp = [threshold](const unsigned char v) {
-      return v >= threshold;
+      return v == threshold;
     };
 
     const auto begin = map.map;
@@ -65,10 +75,10 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     auto it = begin;
     while ((it = std::find_if(it, end, cmp)) != end) {
       const int dist = std::distance(begin, it);
-      const double y_idx = (dist / map.cells_y);
-      const double x_idx = (dist - map.cells_y * y_idx);
-      const double y = (y_idx + offset_x) * map.resolution;
-      const double x = (x_idx + offset_y) * map.resolution;
+      const int y_idx = dist / map.cells_y;
+      const int x_idx = dist - (map.cells_y * y_idx);
+      const float y = (static_cast<float>(y_idx) + offset_x) * map.resolution;
+      const float x = (static_cast<float>(x_idx) + offset_y) * map.resolution;
       rm_.push_back({x, y});
       it++;
     };
@@ -101,8 +111,8 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
                            const VectorPsi& p) {
     VectorPsi dp;
     dp[0] = -cos(x[4]) * p[1] - sin(x[4]) * p[2];
-    dp[1] = 0.0;
-    dp[2] = 0.0;
+    // dp[1] = 0.0;
+    // dp[2] = 0.0;
     dp[3] = -p[4];
     dp[4] = x[0] * sin(x[4]) * p[1] - x[0] * cos(x[4]) * p[2];
 
@@ -117,9 +127,9 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
 
     const VectorStateExt dx_end = dXF(x, xf);
     // do not compute if empty array
-    const double map_cost = rm_.size() ? 100.0 * getCostmapCost(x, rm_, sigma_map_pow_) : 0.0;
-    return 50.0 * (pow(u[0], 2) + pow(u[1], 2)) +
-           20.0 * (std::pow(dx_end[1], 2) + std::pow(dx_end[2], 2)) + map_cost;
+    const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_constants_) : 0.0;
+    return (std::pow(u[0], 2) + std::pow(u[1], 2)) +
+           (std::pow(dx_end[1], 2) + std::pow(dx_end[2], 2)) + map_cost;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
@@ -138,29 +148,28 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   // auxiliary function to computing minimum angle theta
   inline VectorStateExt dXF(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dxf = x;
-    dxf.head(4).noalias() -= xf.head(4);
-    dxf[4] = atan2(sin(x[4] - xf[4]), cos(x[4] - xf[4]));
+    dxf.head(5).noalias() -= xf.head(5);
+    // dxf[4] = atan2(sin(x[4] - xf[4]), cos(x[4] - xf[4]));
     // dxf[4] = x[4] - xf[4];
     dxf[5] = 0.0;
     return dxf;
   }
 
   // compute the cost related to the map
-  inline double getCostmapCost([[maybe_unused]] const VectorStateExt& xk,
-                               [[maybe_unused]] const robot_dynamics::ReduceMap& rm,
-                               [[maybe_unused]] const double sigma_map_pow) {
-    const double coef = 1.0 / std::sqrt(2.0 * M_PI * sigma_map_pow);
-    const double exp_coef = -0.5 / (sigma_map_pow);
-    const auto cost = [xk, exp_coef](const double s, const robot_dynamics::MapPoint& p) {
-      const double x = p.first - xk[1];
-      const double y = p.second - xk[2];
-      const double square_dist = x * x + y * y;
-      return s + std::exp(exp_coef * square_dist);
+  inline double getCostmapCost(const VectorStateExt& xk, const robot_dynamics::ReduceMap& rm,
+                               const MapConstants& constants) {
+    const auto cost = [xk, constants](const float s, const robot_dynamics::MapPoint& p) {
+      const float x = p.first - xk[1];
+      const float y = p.second - xk[2];
+      const float dist = std::hypot(x, y) - constants.inscribed_radious;
+      // const float inflation = std::exp(constants.exp_coef * dist * dist);
+      const float inscribed = 50.0 * dist / std::hypot(1.0, 5.0 * dist) + 50.0 - 5.0;
+      return s + inscribed;
     };
-    return std::accumulate(rm.begin(), rm.end(), 0.0, cost) * coef;
+    return std::accumulate(rm.begin(), rm.end(), 0.0, cost) * constants.coef;
   }
 
-  double sigma_map_pow_;
+  MapConstants map_constants_;
   const DiffDriveParams parmas_;
   robot_dynamics::ReduceMap rm_;
 };
