@@ -20,6 +20,9 @@
 #include <mpc_robot_controller/diff_drive_dynamics.hpp>
 #include <mpc_robot_controller/robot_dynamics.hpp>
 
+#include <set>
+#include <ifopt/ipopt_solver.h>
+
 namespace receding_horizon_controller {
 
 using Dynamics = diff_drive_dynamics::DiffDriveDynamics;
@@ -34,9 +37,11 @@ class RecidingHorizonController {
   void roll(const std::size_t n);
   void predict(const std::size_t n);
   void generatePath();
-  void setChaseWeights();
+  void setControlWeights();
+  void setChaseCollisionWeights();
+  void setChaseOpenSpaceWeights();
   void setPositioningWeights();
-  void setMap(const nav2_costmap_2d::Costmap2D* map);
+  void setMap(const nav2_costmap_2d::Costmap2D* costmap, const robot_dynamics::ReduceMap& rm);
   void setState(const geometry_msgs::msg::Twist& twist_start,
                 const geometry_msgs::msg::PoseStamped& pose_end,
                 const geometry_msgs::msg::Twist& twist_end);
@@ -57,6 +62,10 @@ class RecidingHorizonController {
   std::shared_ptr<controller_nlp::ControllerCost> cost_;
   std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
   std::shared_ptr<controller_nlp::ControllerVariables> variables_;
+
+  const std::set<int> ok_responses_ = {
+    1, 2, 3, 4, 5, -1, -4
+  };
 };
 
 };  // namespace receding_horizon_controller

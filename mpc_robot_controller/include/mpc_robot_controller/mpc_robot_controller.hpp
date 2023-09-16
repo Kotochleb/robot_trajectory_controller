@@ -15,9 +15,14 @@
 #include <nav2_core/controller.hpp>
 
 #include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include <mpc_robot_controller/diff_drive_dynamics.hpp>
 #include <mpc_robot_controller/receding_horizon_controller.hpp>
+#include <mpc_robot_controller/robot_dynamics.hpp>
+
 #include <mpc_robot_controller/robot_dynamics.hpp>
 
 namespace mpc_robot_controller {
@@ -45,6 +50,9 @@ class MPCRobotController : public nav2_core::Controller {
   std::size_t time_steps_;
   std::size_t max_iter_;
   double model_dt_;
+  bool debug_;
+
+  robot_dynamics::ReduceMap generateReducedCostmap();
 
   std::shared_ptr<diff_drive_dynamics::DiffDriveDynamics> rd_;
   std::shared_ptr<receding_horizon_controller::RecidingHorizonController> rhc_;
@@ -63,9 +71,21 @@ class MPCRobotController : public nav2_core::Controller {
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseStamped>>
       targer_pose_pub_;
 
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseArray>>
+      map_gradient_pub_;
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::OccupancyGrid>>
+      continous_costmap_pub_;
+
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
+      reduced_costmap_pub_;
+
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
 
   geometry_msgs::msg::PoseStamped getGoal(const geometry_msgs::msg::PoseStamped& robot_pose);
+  geometry_msgs::msg::PoseArray getMapGradient(const geometry_msgs::msg::PoseStamped& robot_pose);
+  //   nav_msgs::msg::OccupancyGrid getContinousMap(const geometry_msgs::msg::PoseStamped& robot_pose);
+  visualization_msgs::msg::MarkerArray getCostmapMarkerArray(const robot_dynamics::ReduceMap& rm,
+                                                             const std_msgs::msg::Header& header);
 };
 
 }  // namespace mpc_robot_controller

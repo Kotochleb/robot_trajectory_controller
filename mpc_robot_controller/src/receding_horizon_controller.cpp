@@ -8,6 +8,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/utils.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -24,7 +25,7 @@ namespace receding_horizon_controller {
 RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynamics>& dynamics,
                                                      const std::size_t max_horizon,
                                                      const std::size_t max_iter,
-                                                     [[maybe_unused]] const double max_cpu_time)
+                                                     const double max_cpu_time)
     : dynamics_(dynamics),
       max_horizon_(max_horizon),
       max_iter_(max_iter),
@@ -33,46 +34,45 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
   constraint_ = std::make_shared<controller_nlp::ControllerConstraint>(dynamics_);
   cost_ = std::make_shared<controller_nlp::ControllerCost>(dynamics_);
 
-  ipopt_.SetOption("max_iter", int(max_iter_));
-  // ipopt_.SetOption("print_level", 0);
+  ipopt_.SetOption("max_iter", int(max_iter));
+  // ipopt_.SetOption("max_iter", 2);
+  ipopt_.SetOption("print_level", 0);
   ipopt_.SetOption("max_cpu_time", max_cpu_time);
-  // ipopt_.SetOption("max_wall_time", max_cpu_time);
+  ipopt_.SetOption("max_wall_time", max_cpu_time);
   ipopt_.SetOption("warm_start_init_point", "yes");
-  ipopt_.SetOption("warm_start_bound_push", 1e-16);
-  ipopt_.SetOption("warm_start_mult_bound_push", 1e-16);
-  ipopt_.SetOption("warm_start_bound_frac", 1e-16);
-  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-16);
-  ipopt_.SetOption("warm_start_slack_bound_push", 1e-16);
-  ipopt_.SetOption("mu_init", 1e-6);
+  // ipopt_.SetOption("warm_start_bound_push", 1e-9);
+  // ipopt_.SetOption("warm_start_mult_bound_push", 1e-9);
+  // ipopt_.SetOption("warm_start_bound_frac", 1e-9);
+  // ipopt_.SetOption("warm_start_slack_bound_frac", 1e-9);
+  // ipopt_.SetOption("warm_start_slack_bound_push", 1e-9);
+  // ipopt_.SetOption("mu_init", 1e-6);
   // ipopt_.SetOption("warm_start_entire_iterate", "yes");
   // ipopt_.SetOption("nlp_scaling_method", "gradient-based");
+  // ipopt_.SetOption("derivative_test", "first-order");
+  // ipopt_.SetOption("derivative_test_tol", 1e-3);
 };
 
-void RecidingHorizonController::setMap([[maybe_unused]] const nav2_costmap_2d::Costmap2D* costmap) {
-  robot_dynamics::CostMap robot_map;
-  robot_map.thresh = 254;
-  robot_map.resolution = costmap->getResolution();
-  robot_map.cells_x = costmap->getSizeInCellsX();
-  robot_map.cells_y = costmap->getSizeInCellsY();
-  robot_map.map = costmap->getCharMap();
-
-  dynamics_->setSigmaMap(robot_map, 5.0, 0.3);
-  dynamics_->generateReducedCostmap(robot_map);
+void RecidingHorizonController::setMap(const nav2_costmap_2d::Costmap2D* costmap,
+                                       const robot_dynamics::ReduceMap& rm) {
+  dynamics_->setSigmaMap(rm, costmap->getResolution(), 5.0, 0.07);
 }
 
-void RecidingHorizonController::roll(const std::size_t n) {
+void RecidingHorizonController::roll(const std::size_t /*n*/) {
   const Eigen::Index c = u_.cols();
   if (c <= 0) {
     throw std::runtime_error("Can not roll empty control input!");
   }
 
-  if (n >= std::size_t(c)) {
-    u_.leftCols(c - 1) = u_.middleCols(1, c - 2);
-    u_.col(c - 1) = u_.col(c - 2);
-  } else {
-    u_.leftCols(n) = u_.middleCols(1, n);
-    u_.rightCols(c - n).setConstant(0.0);
-  }
+  u_.leftCols(c - 1) = u_.rightCols(c - 1);
+  u_.rightCols(0) = u_.rightCols(1);
+
+  // if (n >= std::size_t(c)) {
+  //   u_.leftCols(c - 1) = u_.middleCols(1, c - 2);
+  //   u_.col(c - 1) = u_.col(c - 2);
+  // } else {
+  //   u_.leftCols(n) = u_.middleCols(1, n);
+  //   u_.rightCols(c - n).setConstant(0.0);
+  // }
 };
 
 void RecidingHorizonController::predict(const std::size_t n) {
@@ -93,9 +93,14 @@ void RecidingHorizonController::predict(const std::size_t n) {
   ipopt_.Solve(nlp_);
 
   // store rresults
-  Eigen::VectorXd vals = nlp_.GetOptVariables()->GetValues();
-  u_.row(0).head(n) = vals.head(n);
-  u_.row(1).head(n) = vals.tail(n);
+  if (ok_responses_.find(ipopt_.GetReturnStatus()) != ok_responses_.end()) {
+    Eigen::VectorXd vals = nlp_.GetOptVariables()->GetValues();
+    u_.row(0).head(n) = vals.head(n);
+    u_.row(1).head(n) = vals.tail(n);
+  }
+  else {
+    u_.setZero();
+  }
 };
 
 void RecidingHorizonController::generatePath() {
@@ -126,29 +131,47 @@ nav_msgs::msg::Path RecidingHorizonController::getPath(
 
 geometry_msgs::msg::Twist RecidingHorizonController::getVelocityCommand() {
   geometry_msgs::msg::Twist twist;
-  twist.linear.x = x_.row(0)[1];
-  twist.angular.z = x_.row(3)[1];
+  const auto& x = x_.col(1);
+  twist.linear.x = x[0];
+  twist.angular.z = x[3];
   return twist;
 }
 
-void RecidingHorizonController::setChaseWeights() {
-  Dynamics::MatrixWeights W;
-  W.diagonal()[0] = 1.0;
-  W.diagonal()[1] = 10.0;
-  W.diagonal()[2] = 10.0;
+void RecidingHorizonController::setControlWeights() {
+  Dynamics::MatrixControlWeights R;
+  R.diagonal()[0] = 100.0;
+  R.diagonal()[1] = 100.0;
+  dynamics_->setControlWeightMatrix(R);
+}
+
+void RecidingHorizonController::setChaseCollisionWeights() {
+  Dynamics::MatrixStateWeights W;
+  W.diagonal()[0] = 10.0;
+  W.diagonal()[1] = 1000.0;
+  W.diagonal()[2] = 1000.0;
   W.diagonal()[3] = 0.0;
   W.diagonal()[4] = 10.0;
-  dynamics_->setWeightMatrix(W);
+  dynamics_->setStateWeightMatrix(W);
+}
+
+void RecidingHorizonController::setChaseOpenSpaceWeights() {
+  Dynamics::MatrixStateWeights W;
+  W.diagonal()[0] = 1000.0;
+  W.diagonal()[1] = 1000.0;
+  W.diagonal()[2] = 1000.0;
+  W.diagonal()[3] = 0.0;
+  W.diagonal()[4] = 100.0;
+  dynamics_->setStateWeightMatrix(W);
 }
 
 void RecidingHorizonController::setPositioningWeights() {
-  Dynamics::MatrixWeights W;
-  W.diagonal()[0] = 0.1;
-  W.diagonal()[1] = 10.0;
-  W.diagonal()[2] = 10.0;
-  W.diagonal()[3] = 0.1;
-  W.diagonal()[4] = 10.0;
-  dynamics_->setWeightMatrix(W);
+  Dynamics::MatrixStateWeights W;
+  W.diagonal()[0] = 1000.0;
+  W.diagonal()[1] = 1000.0;
+  W.diagonal()[2] = 1000.0;
+  W.diagonal()[3] = 100.0;
+  W.diagonal()[4] = 100.0;
+  dynamics_->setStateWeightMatrix(W);
 }
 
 void RecidingHorizonController::setState(const geometry_msgs::msg::Twist& twist_start,

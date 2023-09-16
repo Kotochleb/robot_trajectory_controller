@@ -87,7 +87,8 @@
         "*.ipp": "cpp",
         "hash_map": "cpp",
         "*.txx": "cpp",
-        "hash_set": "cpp"
+        "hash_set": "cpp",
+        "dense": "cpp"
     },
     "python.analysis.extraPaths": [
         "/opt/ros/humble/lib/python3.8/site-packages/"

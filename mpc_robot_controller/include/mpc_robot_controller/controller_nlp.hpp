@@ -30,8 +30,10 @@ class ControllerVariables : public ifopt::VariableSet {
 
   ifopt::Component::VecBound GetBounds() const override {
     VecBound bounds(GetRows());
-    const auto bound_lin = ifopt::Bounds(-1.0, 1.0);
-    const auto bound_ang = ifopt::Bounds(-M_PI, M_PI);
+    const double lin_lim = dynamics_->getLinearAccelerationLimit();
+    const double ang_lim = dynamics_->getAngularAccelerationLimit();
+    const auto bound_lin = ifopt::Bounds(-lin_lim, lin_lim);
+    const auto bound_ang = ifopt::Bounds(-ang_lim, ang_lim);
     std::fill_n(bounds.begin(), bounds.size() / 2, bound_lin);
     std::fill_n(bounds.begin() + (bounds.size() / 2), bounds.size() / 2, bound_ang);
     return bounds;

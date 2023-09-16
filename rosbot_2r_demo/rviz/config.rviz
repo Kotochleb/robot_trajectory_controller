@@ -323,7 +323,7 @@ Visualization Manager:
       Value: true
     - Alpha: 0.699999988079071
       Class: rviz_default_plugins/Map
-      Color Scheme: map
+      Color Scheme: costmap
       Draw Behind: false
       Enabled: true
       Name: Map
@@ -390,6 +390,39 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /local_plan_goal_pose
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /reduced_costmap
+      Value: false
+    - Alpha: 1
+      Arrow Length: 0.05000000074505806
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz_default_plugins/PoseArray
+      Color: 255; 25; 0
+      Enabled: false
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: PoseArray
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Arrow (Flat)
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_gradient
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -436,25 +469,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 5.945765972137451
+      Distance: 10.539523124694824
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.36994004249572754
-        Y: -5.933881759643555
-        Z: 0.15699565410614014
+        X: -0.5740848779678345
+        Y: -2.3733444213867188
+        Z: -2.4311556816101074
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0147993564605713
+      Pitch: 0.709796667098999
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.374652862548828
+      Yaw: 2.459689140319824
     Saved: ~
 Window Geometry:
   Displays:
@@ -473,4 +506,4 @@ Window Geometry:
     collapsed: true
   Width: 1728
   X: 0
-  Y: 231
+  Y: 243
