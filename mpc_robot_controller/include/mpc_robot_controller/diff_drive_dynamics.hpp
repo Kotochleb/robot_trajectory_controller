@@ -190,8 +190,6 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   inline VectorStateExt dXF(const VectorStateExt& x, const VectorStateExt& xf) {
     VectorStateExt dxf = x;
     dxf.head(5).noalias() -= xf.head(5);
-    // dxf[4] = atan2(sin(x[4] - xf[4]), cos(x[4] - xf[4]));
-    // dxf[4] = x[4] - xf[4];
     dxf[5] = 0.0;
     return dxf;
   }

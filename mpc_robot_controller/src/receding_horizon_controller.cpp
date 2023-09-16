@@ -36,16 +36,16 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
 
   ipopt_.SetOption("max_iter", int(max_iter));
   // ipopt_.SetOption("max_iter", 2);
-  ipopt_.SetOption("print_level", 0);
+  ipopt_.SetOption("print_level", 4);
   ipopt_.SetOption("max_cpu_time", max_cpu_time);
   ipopt_.SetOption("max_wall_time", max_cpu_time);
   ipopt_.SetOption("warm_start_init_point", "yes");
-  // ipopt_.SetOption("warm_start_bound_push", 1e-9);
-  // ipopt_.SetOption("warm_start_mult_bound_push", 1e-9);
-  // ipopt_.SetOption("warm_start_bound_frac", 1e-9);
-  // ipopt_.SetOption("warm_start_slack_bound_frac", 1e-9);
-  // ipopt_.SetOption("warm_start_slack_bound_push", 1e-9);
-  // ipopt_.SetOption("mu_init", 1e-6);
+  ipopt_.SetOption("warm_start_bound_push", 1e-12);
+  ipopt_.SetOption("warm_start_mult_bound_push", 1e-12);
+  ipopt_.SetOption("warm_start_bound_frac", 1e-12);
+  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-12);
+  ipopt_.SetOption("warm_start_slack_bound_push", 1e-12);
+  ipopt_.SetOption("mu_init", 1e-6);
   // ipopt_.SetOption("warm_start_entire_iterate", "yes");
   // ipopt_.SetOption("nlp_scaling_method", "gradient-based");
   // ipopt_.SetOption("derivative_test", "first-order");
@@ -166,9 +166,9 @@ void RecidingHorizonController::setChaseOpenSpaceWeights() {
 
 void RecidingHorizonController::setPositioningWeights() {
   Dynamics::MatrixStateWeights W;
-  W.diagonal()[0] = 1000.0;
-  W.diagonal()[1] = 1000.0;
-  W.diagonal()[2] = 1000.0;
+  W.diagonal()[0] = 100.0;
+  W.diagonal()[1] = 10000.0;
+  W.diagonal()[2] = 10000.0;
   W.diagonal()[3] = 100.0;
   W.diagonal()[4] = 100.0;
   dynamics_->setStateWeightMatrix(W);

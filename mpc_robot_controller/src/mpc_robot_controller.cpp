@@ -325,39 +325,36 @@ geometry_msgs::msg::PoseArray MPCRobotController::getMapGradient(
   const auto rm = rd_->getReducedMap();
   const auto constants = rd_->getMapConstants();
 
-  const int x0 = -costmap->getSizeInMetersX() / 2.0;
-  const int xf = costmap->getSizeInMetersX() / 2.0;
-  const int y0 = -costmap->getSizeInMetersY() / 2.0;
-  const int yf = costmap->getSizeInMetersY() / 2.0;
-  const unsigned points = 40;
+  const int x0 = -costmap->getSizeInMetersX() / 2.0 * 1.3;
+  const int xf = costmap->getSizeInMetersX() / 2.0 * 1.3;
+  const int y0 = -costmap->getSizeInMetersY() / 2.0 * 1.3;
+  const int yf = costmap->getSizeInMetersY() / 2.0 * 1.3;
+  const unsigned points = 50;
 
   for (double xx = x0; xx <= xf;
        xx += (costmap->getSizeInMetersX() / static_cast<double>(points))) {
     for (double yy = y0; yy <= yf;
          yy += (costmap->getSizeInMetersY() / static_cast<double>(points))) {
-      diff_drive_dynamics::DiffDriveDynamics::VectorStateExt xk;
-      xk.setZero();
-      xk[1] = xx;
-      xk[2] = yy;
-      const auto dx = rd_->getCostmapDx(xk, rm, constants);
+      if (xx * xx + yy * yy < xf * xf) {
+        diff_drive_dynamics::DiffDriveDynamics::VectorStateExt xk;
+        xk.setZero();
+        xk[1] = xx;
+        xk[2] = yy;
+        const auto dx = rd_->getCostmapDx(xk, rm, constants);
 
-      geometry_msgs::msg::Pose p;
-      p.position.x = xk[1];
-      p.position.y = xk[2];
-      const double yaw = std::atan2(dx[2], dx[1]);
-      const auto q = tf2::Quaternion(tf2::Vector3(0.0, 0.0, 1.0), yaw);
-      p.orientation = tf2::toMsg(q);
-      grad.poses.push_back(p);
+        geometry_msgs::msg::Pose p;
+        p.position.x = xk[1];
+        p.position.y = xk[2];
+        const double yaw = std::atan2(dx[2], dx[1]);
+        const auto q = tf2::Quaternion(tf2::Vector3(0.0, 0.0, 1.0), yaw);
+        p.orientation = tf2::toMsg(q);
+        grad.poses.push_back(p);
+      }
     }
   }
 
   return grad;
 };
-
-// nav_msgs::msg::OccupancyGrid MPCRobotController::getContinousMap(
-//     const geometry_msgs::msg::PoseStamped& robot_pose){
-
-// };
 
 }  // namespace mpc_robot_controller
 
