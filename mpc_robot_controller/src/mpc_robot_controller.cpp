@@ -38,6 +38,7 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   clock_ = node->get_clock();
 
   diff_drive_dynamics::DiffDriveParams params;
+  diff_drive_dynamics::MapConstants map_const;
 
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".time_steps",
                                                rclcpp::ParameterValue(50));
@@ -81,6 +82,33 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".limits.max_joint_speed",
                                                rclcpp::ParameterValue(1.0));
 
+  const auto costmap_pref = plugin_name_ + ".costmap";
+  nav2_util::declare_parameter_if_not_declared(node, costmap_pref + ".radious",
+                                               rclcpp::ParameterValue(0.1));
+
+  const auto inscribed_pref = costmap_pref + ".inscribed";
+  nav2_util::declare_parameter_if_not_declared(node, inscribed_pref + ".scale",
+                                               rclcpp::ParameterValue(1.0));
+  nav2_util::declare_parameter_if_not_declared(node, inscribed_pref + ".magnitude",
+                                               rclcpp::ParameterValue(1.0));
+
+  const auto inflation_pref = costmap_pref + ".inflation";
+  nav2_util::declare_parameter_if_not_declared(node, inflation_pref + ".scale",
+                                               rclcpp::ParameterValue(1.0));
+  nav2_util::declare_parameter_if_not_declared(node, inflation_pref + ".magnitude",
+                                               rclcpp::ParameterValue(1.0));
+
+  const auto gains_pref = plugin_name_ + ".gains";
+  nav2_util::declare_parameter_if_not_declared(node, gains_pref + ".control",
+                                               rclcpp::ParameterValue(std::vector<double>(2)));
+  const auto state_pref = gains_pref + ".state";
+  nav2_util::declare_parameter_if_not_declared(node, state_pref + ".chase_open_space",
+                                               rclcpp::ParameterValue(std::vector<double>(5)));
+  nav2_util::declare_parameter_if_not_declared(node, state_pref + ".chase_collision_space",
+                                               rclcpp::ParameterValue(std::vector<double>(5)));
+  nav2_util::declare_parameter_if_not_declared(node, state_pref + ".position",
+                                               rclcpp::ParameterValue(std::vector<double>(5)));
+
   int ts, mi;
   node->get_parameter(plugin_name_ + ".time_steps", ts);
   node->get_parameter(plugin_name_ + ".max_iter", mi);
@@ -103,6 +131,17 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   node->get_parameter(plugin_name_ + ".limits.wheel_separation", params.wheel_separation);
   node->get_parameter(plugin_name_ + ".limits.max_joint_speed", params.max_joint_speed);
 
+  node->get_parameter(costmap_pref + ".radious", map_const.radious);
+  node->get_parameter(inscribed_pref + ".scale", map_const.inscribed.scale);
+  node->get_parameter(inscribed_pref + ".magnitude", map_const.inscribed.magnitude);
+  node->get_parameter(inflation_pref + ".scale", map_const.inflation.scale);
+  node->get_parameter(inflation_pref + ".magnitude", map_const.inflation.magnitude);
+
+  node->get_parameter(gains_pref + ".control", control_weights_);
+  node->get_parameter(state_pref + ".chase_open_space", chase_open_space_weights_);
+  node->get_parameter(state_pref + ".chase_collision_space", chase_collision_weights_);
+  node->get_parameter(state_pref + ".position", positioning_weights_);
+
   path_depth_idx_ = 0;
 
   double transform_tolerance;
@@ -115,9 +154,10 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   const double max_cpu_time = (1.0 / controller_frequency) * 0.8;
 
   params.dt = model_dt_;
-  rd_ = std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(params);
+  rd_ = std::make_shared<diff_drive_dynamics::DiffDriveDynamics>(params, map_const);
   rhc_ = std::make_unique<receding_horizon_controller::RecidingHorizonController>(
       rd_, time_steps_, max_iter_, max_cpu_time);
+  rhc_->setControlWeights(control_weights_);
 
   targer_pose_pub_ =
       node->create_publisher<geometry_msgs::msg::PoseStamped>("local_plan_goal_pose", 1);
@@ -184,9 +224,9 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   const auto rm = generateReducedCostmap();
 
   const double goal_diff = nav2_util::geometry_utils::euclidean_distance(goal, last_goal_);
-  if (goal_diff > goal_dist_thresh_) {
+  if (goal_diff > goal_dist_thresh_ || is_in_recovery_) {
     rhc_->setColdStart();
-    if (goal_diff > 1.0) {
+    if (goal_diff > 1.0 || is_in_recovery_) {
       RCLCPP_INFO(logger_, "%s Very far goal. Performing full coldstart.", plugin_name_.c_str());
       rhc_->clearControlMemory();
       last_path_.poses.clear();
@@ -204,18 +244,18 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   const auto thresh = (costmap->getSizeInMetersX() + costmap->getSizeInMetersY()) / 2.0;
   if (nav2_util::geometry_utils::euclidean_distance(pose, final_path_point) > thresh) {
     if (rm.size()) {
-      rhc_->setChaseCollisionWeights();
+      rhc_->setStateWeights(chase_collision_weights_);
 
     } else {
-      rhc_->setChaseOpenSpaceWeights();
+      rhc_->setStateWeights(chase_open_space_weights_);
     }
     goal_twist.linear.x = rd_->getVelocityForwardLimit();
   } else {
-    rhc_->setPositioningWeights();
+    rhc_->setStateWeights(positioning_weights_);
   }
 
   rhc_->setState(twist, goal, goal_twist);
-  rhc_->setMap(costmap, rm);
+  rhc_->setMap(rm);
   const auto n = time_steps_;
   rhc_->roll(n);
   const bool predict_suceeded = rhc_->predict(n);
@@ -227,25 +267,25 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   cmd_vel.header.frame_id = pose.header.frame_id;
   cmd_vel.header.stamp = clock_->now();
 
-  bool is_in_recovery = false;
-
-  if (predict_suceeded && !path.poses.empty() && !isColliding(path)) {
+  if (predict_suceeded && !path.poses.empty() && !isColliding(path, rm)) {
     path_depth_idx_ = 0;
     recovery_cnt_ = 0;
     twist_mem_ = rhc_->getVelocityCommands(path_depth_);
     last_path_ = path;
     cmd_vel.twist = twist_mem_[0];
+    is_in_recovery_ = false;
   } else {
     if (path_depth_idx_ < path_depth_ && !last_path_.poses.empty() && !twist_mem_.empty() &&
-        !isColliding(last_path_)) {
+        !isColliding(last_path_, rm)) {
       RCLCPP_WARN(logger_, "%s Dropping path with collision. Using previous one.",
                   plugin_name_.c_str());
       path_depth_idx_++;
       cmd_vel.twist = twist_mem_[path_depth_idx_];
     } else {
       if (recovery_cnt_ > 3) {
-        RCLCPP_WARN(logger_, "%s Too many recovery attempts. Performing random push.",
+        RCLCPP_WARN(logger_, "%s Too many recovery attempts. Reseting optimization.",
                     plugin_name_.c_str());
+        rhc_->resetOptimuizer();
         rhc_->randomizeControlMemory();
         recovery_cnt_ = 0;
       } else {
@@ -253,20 +293,20 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
       }
       rhc_->setColdStart();
       cmd_vel.twist = getRecoveryDirection(pose);
-      is_in_recovery = true;
+      is_in_recovery_ = true;
       recovery_cnt_++;
     }
   }
 
-  if (!is_in_recovery || debug_) {
+  if (!is_in_recovery_ || debug_) {
     local_pub_->publish(last_path_);
+  } else {
+    local_pub_->publish(nav_msgs::msg::Path());
   }
   targer_pose_pub_->publish(goal);
 
   if (debug_) {
-    const auto grad = getMapGradient(goal);
-    map_gradient_pub_->publish(grad);
-
+    map_gradient_pub_->publish(getMapGradient(goal));
     const auto markers = getCostmapMarkerArray(rm, pose.header);
     reduced_costmap_pub_->publish(markers);
   }
@@ -385,7 +425,11 @@ robot_dynamics::ReduceMap MPCRobotController::generateReducedCostmap() {
   return rm;
 }
 
-bool MPCRobotController::isColliding(const nav_msgs::msg::Path& path) {
+bool MPCRobotController::isColliding(const nav_msgs::msg::Path& path,
+                                     const robot_dynamics::ReduceMap& rm) {
+  if (rm.size() == 0) {
+    return false;
+  }
   const auto costmap = costmap_ros_->getCostmap();
   const auto isColliding = [&, costmap](const geometry_msgs::msg::PoseStamped& p) {
     geometry_msgs::msg::PoseStamped in, out;
@@ -449,10 +493,10 @@ geometry_msgs::msg::PoseArray MPCRobotController::getMapGradient(
   const auto rm = rd_->getReducedMap();
   const auto constants = rd_->getMapConstants();
 
-  const int x0 = -costmap->getSizeInMetersX() / 2.0 * 1.3;
-  const int xf = costmap->getSizeInMetersX() / 2.0 * 1.3;
-  const int y0 = -costmap->getSizeInMetersY() / 2.0 * 1.3;
-  const int yf = costmap->getSizeInMetersY() / 2.0 * 1.3;
+  const int x0 = -costmap->getSizeInMetersX() * 0.6;
+  const int xf = costmap->getSizeInMetersX() * 0.6;
+  const int y0 = -costmap->getSizeInMetersY() * 0.6;
+  const int yf = costmap->getSizeInMetersY() * 0.6;
   const unsigned points = 50;
 
   for (double xx = x0; xx <= xf;
@@ -464,7 +508,7 @@ geometry_msgs::msg::PoseArray MPCRobotController::getMapGradient(
         xk.setZero();
         xk[1] = xx;
         xk[2] = yy;
-        const auto dx = rd_->getCostmapDx(xk, rm, constants);
+        const auto dx = -rd_->getCostmapDx(xk, rm, constants);
 
         geometry_msgs::msg::Pose p;
         p.position.x = xk[1];

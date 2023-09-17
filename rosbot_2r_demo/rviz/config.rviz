@@ -408,7 +408,7 @@ Visualization Manager:
       Axes Radius: 0.009999999776482582
       Class: rviz_default_plugins/PoseArray
       Color: 255; 25; 0
-      Enabled: false
+      Enabled: true
       Head Length: 0.07000000029802322
       Head Radius: 0.029999999329447746
       Name: PoseArray
@@ -422,7 +422,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /map_gradient
-      Value: false
+      Value: true
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 25; 255; 0
@@ -482,25 +482,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 8.267374038696289
+      Distance: 8.46473503112793
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 4.477267265319824
-        Y: 4.437667369842529
-        Z: -1.5049906969070435
+        X: 4.022899627685547
+        Y: 1.4234493970870972
+        Z: -1.2594568729400635
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9197968244552612
+      Pitch: 1.0447968244552612
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.3297171592712402
+      Yaw: 3.119727611541748
     Saved: ~
 Window Geometry:
   Displays:

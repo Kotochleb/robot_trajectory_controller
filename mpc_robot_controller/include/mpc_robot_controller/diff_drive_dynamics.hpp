@@ -9,7 +9,6 @@
 #include <Eigen/Dense>
 
 #include <mpc_robot_controller/robot_dynamics.hpp>
-
 namespace diff_drive_dynamics {
 
 struct DiffDriveParams {
@@ -29,9 +28,15 @@ struct DiffDriveParams {
 };
 
 struct MapConstants {
-  float coef;
-  float exp_coef;
-  float inscribed_radious;
+  double radious;
+  struct {
+    double scale;
+    double magnitude;
+  } inscribed;
+  struct {
+    double scale;
+    double magnitude;
+  } inflation;
 };
 
 using robot_dynamics::RobotDynamics;
@@ -41,11 +46,12 @@ static constexpr int control_inputs = 2;
 struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs> {
  public:
   friend class RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>;
-  DiffDriveDynamics(const DiffDriveParams& params)
+  DiffDriveDynamics(const DiffDriveParams& params, const MapConstants& map_const)
       : RobotDynamics<DiffDriveDynamics, state_variables, control_inputs>(params.dt),
         half_width_(params.wheel_separation * 0.5),
         d_wheel_(params.wheel_radius * 2.0),
         parmas_(params),
+        map_const_(map_const),
         rm_(0){
 
         };
@@ -55,27 +61,26 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     return out;
   };
 
-  inline void setSigmaMap(const robot_dynamics::ReduceMap& rm, const double resolution,
-                          const double sigma, const double inscribed_radious) {
-    const double sigma_map_pow = std::pow(resolution * sigma, 2.0);
-    map_constants_.coef = 1.0 / std::sqrt(2.0 * M_PI * sigma_map_pow);
-    map_constants_.exp_coef = -0.5 / (sigma_map_pow);
-    map_constants_.inscribed_radious = inscribed_radious;
-    rm_ = rm;
-  }
+  inline void setSigmaMap(const robot_dynamics::ReduceMap& rm) { rm_ = rm; }
 
   // compute the cost related to the map
   inline double getCostmapCost(const VectorStateExt& xk, const robot_dynamics::ReduceMap& rm,
                                const MapConstants& constants) {
-    const auto cost = [xk, constants](const float s, const robot_dynamics::MapPoint& p) {
-      const float x = xk[1] - p.first;
-      const float y = xk[2] - p.second;
-      const float dist = std::hypot(x, y)  - constants.inscribed_radious;
+    const auto cost = [xk, constants](const double s, const robot_dynamics::MapPoint& p) {
+      const double x = xk[1] - p.first;
+      const double y = xk[2] - p.second;
+      const double dist = std::hypot(x, y) - constants.radious;
 
-      const float e = std::exp(-20.0 * dist);
-      const float inscribed = 200.0 / (1.0 + e);
-      // const float inflation = 10.0 * e;
-      return s + inscribed;
+      const double a = constants.inscribed.scale;
+      const double b = constants.inscribed.magnitude;
+      const double e = std::exp(-a * dist);
+      const double inscribed = -b / (1.0 + e);
+
+      const double c = constants.inflation.scale;
+      const double d = constants.inflation.magnitude;
+      const double inflation = d * std::exp(-c * dist);
+
+      return s + inscribed + inflation;
     };
     return std::accumulate(rm.begin(), rm.end(), 0.0, cost);
   }
@@ -87,18 +92,22 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     VectorStateExt dp;
     dp.setZero();
     for (const auto& p : rm) {
-      const float x = xk[1] - p.first;
-      const float y = xk[2] - p.second;
-      const float v_dist = std::hypot(x, y);
-      const float dist = v_dist - constants.inscribed_radious;
+      const double x = xk[1] - p.first;
+      const double y = xk[2] - p.second;
+      const double v_dist = std::hypot(x, y);
+      const double dist = v_dist - constants.radious;
 
-      // const float a = 10.0;
-      const float e = std::exp(-10.0 * dist);
-      const float inscribed_grad = 200.0 * 10.0 * e / std::pow(1.0 + e, 2.0);
-      // const float inflation_grad = -10.0 * std::exp(-dist);
+      const double a = constants.inscribed.scale;
+      const double b = constants.inscribed.magnitude;
+      const double e = std::exp(-a * dist);
+      const double inscribed_grad = -b * a * e / std::pow(1.0 + e, 2.0);
 
-      dp[1] += -x / v_dist * (inscribed_grad);
-      dp[2] += -y / v_dist * (inscribed_grad);
+      const double c = constants.inflation.scale;
+      const double d = constants.inflation.magnitude;
+      const double inflation_grad = -d * c * std::exp(-c * dist);
+
+      dp[1] += x / v_dist * (inscribed_grad + inflation_grad);
+      dp[2] += y / v_dist * (inscribed_grad + inflation_grad);
     }
 
     return dp;
@@ -110,7 +119,7 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
   inline double getLinearAccelerationLimit() { return parmas_.acceleration.linear; };
   inline double getAngularAccelerationLimit() { return parmas_.acceleration.angular; };
   inline robot_dynamics::ReduceMap getReducedMap() { return rm_; };
-  inline MapConstants getMapConstants() { return map_constants_; };
+  inline MapConstants getMapConstants() { return map_const_; };
 
  private:
   inline MatrixControl getInitialValues(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
@@ -154,22 +163,27 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     const double state_cost = dx_end.transpose() * W_ * dx_end;
     const double control_cost = u.transpose() * R_ * u;
 
-    const double vel_lim_cost = -10.0 * x[0] * x[0] + 2.0 * parmas_.velocity.forward;
-    const double rot_lim_cost = -10.0 * x[3] * x[3] + 2.0 * parmas_.velocity.angular;
+    // const double vel_lim_cost = -10.0 * x[0] * x[0] + 2.0 * parmas_.velocity.forward;
+    // const double rot_lim_cost = -10.0 * x[3] * x[3] + 2.0 * parmas_.velocity.angular;
 
     // do not compute if empty array
-    const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_constants_) : 0.0;
-    return 0.5 * (state_cost + control_cost) + map_cost + vel_lim_cost + rot_lim_cost;
+    const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_const_) : 0.0;
+    return 0.5 * (state_cost + control_cost) + map_cost;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
+    VectorStateExt map_deriv;
+    if (rm_.size() > 0) {
+      map_deriv = getCostmapDx(x, rm_, map_const_);
+    } else {
+      map_deriv.setZero();
+    }
+    // VectorStateExt ext_cost;
+    // ext_cost.setZero();
+    // ext_cost[0] = 2.0 * 10.0 * x[0];
+    // ext_cost[3] = 2.0 * 10.0 * x[3];
     const VectorStateExt dq = dXF(x, xf);
-    const VectorStateExt map_deriv = getCostmapDx(x, rm_, map_constants_);
-    VectorStateExt ext_cost;
-    ext_cost.setZero();
-    ext_cost[0] = 2.0 * 10.0 * x[0];
-    ext_cost[3] = 2.0 * 10.0 * x[3];
-    return W_ * dq + map_deriv + ext_cost;
+    return W_ * dq + map_deriv;
   }
 
   inline VectorControl dqDu(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
@@ -196,8 +210,8 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
 
   const double half_width_;
   const double d_wheel_;
-  MapConstants map_constants_;
   const DiffDriveParams parmas_;
+  const MapConstants map_const_;
   robot_dynamics::ReduceMap rm_;
 };
 

@@ -55,6 +55,13 @@ class MPCRobotController : public nav2_core::Controller {
   unsigned path_depth_;
   unsigned path_depth_idx_;
   unsigned recovery_cnt_{0};
+  bool is_in_recovery_{false};
+
+  std::vector<double> control_weights_;
+  std::vector<double> chase_collision_weights_;
+  std::vector<double> chase_open_space_weights_;
+  std::vector<double> positioning_weights_;
+
   std::vector<geometry_msgs::msg::Twist> twist_mem_;
   nav_msgs::msg::Path last_path_;
   geometry_msgs::msg::PoseStamped last_goal_;
@@ -93,7 +100,7 @@ class MPCRobotController : public nav2_core::Controller {
   //   nav_msgs::msg::OccupancyGrid getContinousMap(const geometry_msgs::msg::PoseStamped& robot_pose);
   visualization_msgs::msg::MarkerArray getCostmapMarkerArray(const robot_dynamics::ReduceMap& rm,
                                                              const std_msgs::msg::Header& header);
-  bool isColliding(const nav_msgs::msg::Path& path);
+  bool isColliding(const nav_msgs::msg::Path& path, const robot_dynamics::ReduceMap& rm);
   geometry_msgs::msg::Twist getRecoveryDirection(const geometry_msgs::msg::PoseStamped& robot_pose);
 };
 

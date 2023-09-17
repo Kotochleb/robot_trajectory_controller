@@ -37,15 +37,14 @@ class RecidingHorizonController {
   void roll(const std::size_t n);
   bool predict(const std::size_t n);
   void generatePath();
-  void setControlWeights();
-  void setChaseCollisionWeights();
-  void setChaseOpenSpaceWeights();
-  void setPositioningWeights();
+  void setControlWeights(const std::vector<double> r_vect);
+  void setStateWeights(const std::vector<double> w_vect);
   void clearControlMemory();
   void randomizeControlMemory();
   void setColdStart();
   void setWarmStart();
-  void setMap(const nav2_costmap_2d::Costmap2D* costmap, const robot_dynamics::ReduceMap& rm);
+  void resetOptimuizer();
+  void setMap(const robot_dynamics::ReduceMap& rm);
   void setState(const geometry_msgs::msg::Twist& twist_start,
                 const geometry_msgs::msg::PoseStamped& pose_end,
                 const geometry_msgs::msg::Twist& twist_end);
@@ -57,12 +56,13 @@ class RecidingHorizonController {
  private:
   std::shared_ptr<Dynamics> dynamics_;
   std::size_t max_horizon_;
-  std::size_t max_iter_;
+  int max_iter_;
+  const double max_cpu_time_;
 
   Dynamics::MatrixState x_;
   Dynamics::MatrixControl u_;
 
-  ifopt::IpoptSolver ipopt_;
+  std::unique_ptr<ifopt::IpoptSolver> ipopt_;
   std::shared_ptr<controller_nlp::ControllerCost> cost_;
   std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
   std::shared_ptr<controller_nlp::ControllerVariables> variables_;
