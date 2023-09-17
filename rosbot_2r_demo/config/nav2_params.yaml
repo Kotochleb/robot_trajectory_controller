@@ -66,9 +66,9 @@ controller_server:
       debug: false
       limits:
         velocity:
-          forward: 0.4
-          backward: 1.0
-          angular: 3.14
+          forward: 0.3
+          backward: 0.3
+          angular: 0.8
         acceleration:
           linear: 0.5
           angular: 4.0
@@ -93,7 +93,7 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      footprint: '[[0.10, 0.12], [0.10, -0.12], [-0.10, -0.12], [-0.10, 0.12]]'
+      footprint: '[[0.13, 0.15], [0.13, -0.15], [-0.13, -0.15], [-0.13, 0.15]]'
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

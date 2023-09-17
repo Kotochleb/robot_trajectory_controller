@@ -35,26 +35,14 @@ RecidingHorizonController::RecidingHorizonController(const std::shared_ptr<Dynam
   cost_ = std::make_shared<controller_nlp::ControllerCost>(dynamics_);
 
   ipopt_.SetOption("max_iter", int(max_iter));
-  // ipopt_.SetOption("max_iter", 2);
-  ipopt_.SetOption("print_level", 4);
+  ipopt_.SetOption("print_level", 0);
   ipopt_.SetOption("max_cpu_time", max_cpu_time);
-  ipopt_.SetOption("max_wall_time", max_cpu_time);
-  ipopt_.SetOption("warm_start_init_point", "yes");
-  ipopt_.SetOption("warm_start_bound_push", 1e-12);
-  ipopt_.SetOption("warm_start_mult_bound_push", 1e-12);
-  ipopt_.SetOption("warm_start_bound_frac", 1e-12);
-  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-12);
-  ipopt_.SetOption("warm_start_slack_bound_push", 1e-12);
-  ipopt_.SetOption("mu_init", 1e-6);
-  // ipopt_.SetOption("warm_start_entire_iterate", "yes");
-  // ipopt_.SetOption("nlp_scaling_method", "gradient-based");
-  // ipopt_.SetOption("derivative_test", "first-order");
-  // ipopt_.SetOption("derivative_test_tol", 1e-3);
+  ipopt_.SetOption("acceptable_tol", 1e-4);
 };
 
 void RecidingHorizonController::setMap(const nav2_costmap_2d::Costmap2D* costmap,
                                        const robot_dynamics::ReduceMap& rm) {
-  dynamics_->setSigmaMap(rm, costmap->getResolution(), 5.0, 0.07);
+  dynamics_->setSigmaMap(rm, costmap->getResolution(), 5.0, 0.1);
 }
 
 void RecidingHorizonController::roll(const std::size_t /*n*/) {
@@ -75,7 +63,38 @@ void RecidingHorizonController::roll(const std::size_t /*n*/) {
   // }
 };
 
-void RecidingHorizonController::predict(const std::size_t n) {
+void RecidingHorizonController::clearControlMemory() {
+  u_.setZero();
+}
+
+void RecidingHorizonController::randomizeControlMemory() {
+  u_.setRandom();
+  u_.row(0) *= dynamics_->getLinearAccelerationLimit();
+  u_.row(1) *= dynamics_->getAngularAccelerationLimit();
+}
+
+
+void RecidingHorizonController::setWarmStart() {
+  ipopt_.SetOption("warm_start_init_point", "yes");
+  ipopt_.SetOption("warm_start_bound_push", 1e-12);
+  ipopt_.SetOption("warm_start_mult_bound_push", 1e-12);
+  ipopt_.SetOption("warm_start_bound_frac", 1e-12);
+  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-12);
+  ipopt_.SetOption("warm_start_slack_bound_push", 1e-12);
+  ipopt_.SetOption("mu_init", 1e-6);
+}
+
+void RecidingHorizonController::setColdStart() {
+  ipopt_.SetOption("warm_start_init_point", "no");
+  ipopt_.SetOption("warm_start_bound_push", 1e-6);
+  ipopt_.SetOption("warm_start_mult_bound_push", 1e-6);
+  ipopt_.SetOption("warm_start_bound_frac", 1e-6);
+  ipopt_.SetOption("warm_start_slack_bound_frac", 1e-6);
+  ipopt_.SetOption("warm_start_slack_bound_push", 1e-6);
+  ipopt_.SetOption("mu_init", 0.1);
+}
+
+bool RecidingHorizonController::predict(const std::size_t n) {
   ifopt::Problem nlp_;
   nlp_.AddConstraintSet(constraint_);
   nlp_.AddCostSet(cost_);
@@ -97,10 +116,9 @@ void RecidingHorizonController::predict(const std::size_t n) {
     Eigen::VectorXd vals = nlp_.GetOptVariables()->GetValues();
     u_.row(0).head(n) = vals.head(n);
     u_.row(1).head(n) = vals.tail(n);
+    return true;
   }
-  else {
-    u_.setZero();
-  }
+  return false;
 };
 
 void RecidingHorizonController::generatePath() {
@@ -129,12 +147,16 @@ nav_msgs::msg::Path RecidingHorizonController::getPath(
   return path;
 }
 
-geometry_msgs::msg::Twist RecidingHorizonController::getVelocityCommand() {
-  geometry_msgs::msg::Twist twist;
-  const auto& x = x_.col(1);
-  twist.linear.x = x[0];
-  twist.angular.z = x[3];
-  return twist;
+std::vector<geometry_msgs::msg::Twist> RecidingHorizonController::getVelocityCommands(
+    const unsigned n) {
+  std::vector<geometry_msgs::msg::Twist> twist_mem;
+  twist_mem.reserve(n);
+  for (unsigned i = 0; i < n; i++) {
+    const auto& x = x_.col(i + 1);
+    twist_mem[i].linear.x = x[0];
+    twist_mem[i].angular.z = x[3];
+  }
+  return twist_mem;
 }
 
 void RecidingHorizonController::setControlWeights() {

@@ -18,7 +18,7 @@
 
 #include <visualization_msgs/msg/marker_array.hpp>
 
-#include <iostream>
+#include <tf2/utils.h>
 
 namespace mpc_robot_controller {
 
@@ -47,6 +47,12 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
                                                rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".debug",
                                                rclcpp::ParameterValue(false));
+
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".path_memory_depth",
+                                               rclcpp::ParameterValue(2));
+
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_distance_treshold",
+                                               rclcpp::ParameterValue(0.2));
 
   const auto lim_vel_pref = plugin_name_ + ".limits.velocity";
   nav2_util::declare_parameter_if_not_declared(node, lim_vel_pref + ".forward",
@@ -82,6 +88,11 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   max_iter_ = static_cast<std::size_t>(mi);
   node->get_parameter(plugin_name_ + ".debug", debug_);
 
+  int pd;
+  node->get_parameter(plugin_name_ + ".path_memory_depth", pd);
+  path_depth_ = static_cast<unsigned>(pd);
+  node->get_parameter(plugin_name_ + ".goal_distance_treshold", goal_dist_thresh_);
+
   node->get_parameter(plugin_name_ + ".model_dt", model_dt_);
   node->get_parameter(lim_vel_pref + ".forward", params.velocity.forward);
   node->get_parameter(lim_vel_pref + ".backward", params.velocity.backward);
@@ -91,6 +102,8 @@ void MPCRobotController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPt
   node->get_parameter(plugin_name_ + ".limits.wheel_radius", params.wheel_radius);
   node->get_parameter(plugin_name_ + ".limits.wheel_separation", params.wheel_separation);
   node->get_parameter(plugin_name_ + ".limits.max_joint_speed", params.max_joint_speed);
+
+  path_depth_idx_ = 0;
 
   double transform_tolerance;
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance);
@@ -170,6 +183,22 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
 
   const auto rm = generateReducedCostmap();
 
+  const double goal_diff = nav2_util::geometry_utils::euclidean_distance(goal, last_goal_);
+  if (goal_diff > goal_dist_thresh_) {
+    rhc_->setColdStart();
+    if (goal_diff > 1.0) {
+      RCLCPP_INFO(logger_, "%s Very far goal. Performing full coldstart.", plugin_name_.c_str());
+      rhc_->clearControlMemory();
+      last_path_.poses.clear();
+      twist_mem_.clear();
+    } else {
+      RCLCPP_INFO(logger_, "%s Goal further than threshold. Using cold start parameters.",
+                  plugin_name_.c_str());
+    }
+  } else {
+    rhc_->setWarmStart();
+  }
+
   geometry_msgs::msg::Twist goal_twist;
   const auto costmap = costmap_ros_->getCostmap();
   const auto thresh = (costmap->getSizeInMetersX() + costmap->getSizeInMetersY()) / 2.0;
@@ -189,11 +218,49 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
   rhc_->setMap(costmap, rm);
   const auto n = time_steps_;
   rhc_->roll(n);
-  rhc_->predict(n);
+  const bool predict_suceeded = rhc_->predict(n);
   rhc_->generatePath();
   const auto path = rhc_->getPath(n);
 
-  local_pub_->publish(path);
+  // Create and publish a TwistStamped message with the desired velocity
+  geometry_msgs::msg::TwistStamped cmd_vel;
+  cmd_vel.header.frame_id = pose.header.frame_id;
+  cmd_vel.header.stamp = clock_->now();
+
+  bool is_in_recovery = false;
+
+  if (predict_suceeded && !path.poses.empty() && !isColliding(path)) {
+    path_depth_idx_ = 0;
+    recovery_cnt_ = 0;
+    twist_mem_ = rhc_->getVelocityCommands(path_depth_);
+    last_path_ = path;
+    cmd_vel.twist = twist_mem_[0];
+  } else {
+    if (path_depth_idx_ < path_depth_ && !last_path_.poses.empty() && !twist_mem_.empty() &&
+        !isColliding(last_path_)) {
+      RCLCPP_WARN(logger_, "%s Dropping path with collision. Using previous one.",
+                  plugin_name_.c_str());
+      path_depth_idx_++;
+      cmd_vel.twist = twist_mem_[path_depth_idx_];
+    } else {
+      if (recovery_cnt_ > 3) {
+        RCLCPP_WARN(logger_, "%s Too many recovery attempts. Performing random push.",
+                    plugin_name_.c_str());
+        rhc_->randomizeControlMemory();
+        recovery_cnt_ = 0;
+      } else {
+        RCLCPP_WARN(logger_, "%s Preforming recovery.", plugin_name_.c_str());
+      }
+      rhc_->setColdStart();
+      cmd_vel.twist = getRecoveryDirection(pose);
+      is_in_recovery = true;
+      recovery_cnt_++;
+    }
+  }
+
+  if (!is_in_recovery || debug_) {
+    local_pub_->publish(last_path_);
+  }
   targer_pose_pub_->publish(goal);
 
   if (debug_) {
@@ -204,12 +271,7 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
     reduced_costmap_pub_->publish(markers);
   }
 
-  // Create and publish a TwistStamped message with the desired velocity
-  geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header.frame_id = pose.header.frame_id;
-  cmd_vel.header.stamp = clock_->now();
-  cmd_vel.twist = rhc_->getVelocityCommand();
-
+  last_goal_ = goal;
   return cmd_vel;
 }
 
@@ -258,6 +320,48 @@ geometry_msgs::msg::PoseStamped MPCRobotController::getGoal(
   end_pose.pose = global_plan_.poses.back().pose;
   return end_pose;
 }
+geometry_msgs::msg::Twist MPCRobotController::getRecoveryDirection(
+    const geometry_msgs::msg::PoseStamped& robot_pose) {
+  if (global_plan_.poses.empty()) {
+    throw nav2_core::PlannerException("Received plan with zero length!");
+  }
+
+  geometry_msgs::msg::PoseStamped global_robot_pose;
+  tf_->transform(robot_pose, global_robot_pose, global_plan_.header.frame_id, transform_tolerance_);
+
+  geometry_msgs::msg::PoseStamped last_path_pose = global_plan_.poses[0];
+  unsigned i;
+  for (i = 0; i < global_plan_.poses.size(); i++) {
+    const double prev_dist =
+        nav2_util::geometry_utils::euclidean_distance(last_path_pose, global_robot_pose);
+    const double curr_dist =
+        nav2_util::geometry_utils::euclidean_distance(last_path_pose, global_robot_pose);
+    last_path_pose = global_plan_.poses[i];
+    if (curr_dist > prev_dist) {
+      break;
+    }
+  };
+  if (i + 5 < global_plan_.poses.size()) {
+    last_path_pose = global_plan_.poses[i + 5];
+  } else {
+    last_path_pose = global_plan_.poses.back();
+  }
+
+  const double dx = robot_pose.pose.position.x - last_path_pose.pose.position.x;
+  const double dy = robot_pose.pose.position.y - last_path_pose.pose.position.y;
+  const double rot = std::atan2(dy, dx);
+
+  geometry_msgs::msg::Twist twist;
+  twist.angular.z = 0.5 * rot;
+
+  if (twist.angular.z > M_PI / 8.0) {
+    twist.linear.x = 0.0;
+  } else {
+    twist.linear.x = 0.01;
+  }
+
+  return twist;
+}
 
 // compute the cost related to the map
 robot_dynamics::ReduceMap MPCRobotController::generateReducedCostmap() {
@@ -279,6 +383,26 @@ robot_dynamics::ReduceMap MPCRobotController::generateReducedCostmap() {
   };
 
   return rm;
+}
+
+bool MPCRobotController::isColliding(const nav_msgs::msg::Path& path) {
+  const auto costmap = costmap_ros_->getCostmap();
+  const auto isColliding = [&, costmap](const geometry_msgs::msg::PoseStamped& p) {
+    geometry_msgs::msg::PoseStamped in, out;
+    in = p;
+    in.header.frame_id = "base_link";
+    tf_->transform(in, out, "odom", transform_tolerance_);
+
+    unsigned mx, my;
+    costmap->worldToMap(out.pose.position.x, out.pose.position.y, mx, my);
+    const unsigned char cost = costmap->getCost(mx, my);
+    if (cost == 253 || cost == 254) {
+      return true;
+    }
+    return false;
+  };
+
+  return std::find_if(path.poses.begin(), path.poses.end(), isColliding) != path.poses.end();
 }
 
 visualization_msgs::msg::MarkerArray MPCRobotController::getCostmapMarkerArray(

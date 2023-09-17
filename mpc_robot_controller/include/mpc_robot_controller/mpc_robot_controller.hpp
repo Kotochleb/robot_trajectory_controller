@@ -50,7 +50,14 @@ class MPCRobotController : public nav2_core::Controller {
   std::size_t time_steps_;
   std::size_t max_iter_;
   double model_dt_;
+  double goal_dist_thresh_;
   bool debug_;
+  unsigned path_depth_;
+  unsigned path_depth_idx_;
+  unsigned recovery_cnt_{0};
+  std::vector<geometry_msgs::msg::Twist> twist_mem_;
+  nav_msgs::msg::Path last_path_;
+  geometry_msgs::msg::PoseStamped last_goal_;
 
   robot_dynamics::ReduceMap generateReducedCostmap();
 
@@ -86,6 +93,8 @@ class MPCRobotController : public nav2_core::Controller {
   //   nav_msgs::msg::OccupancyGrid getContinousMap(const geometry_msgs::msg::PoseStamped& robot_pose);
   visualization_msgs::msg::MarkerArray getCostmapMarkerArray(const robot_dynamics::ReduceMap& rm,
                                                              const std_msgs::msg::Header& header);
+  bool isColliding(const nav_msgs::msg::Path& path);
+  geometry_msgs::msg::Twist getRecoveryDirection(const geometry_msgs::msg::PoseStamped& robot_pose);
 };
 
 }  // namespace mpc_robot_controller

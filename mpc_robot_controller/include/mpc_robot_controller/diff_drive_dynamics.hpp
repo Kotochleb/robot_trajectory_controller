@@ -154,22 +154,22 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     const double state_cost = dx_end.transpose() * W_ * dx_end;
     const double control_cost = u.transpose() * R_ * u;
 
-    // const double vel_lim_cost = -10.0 * x[0] * x[0] + 2.0 * parmas_.velocity.forward;
-    // const double rot_lim_cost = -10.0 * x[3] * x[3] + 2.0 * parmas_.velocity.angular;
+    const double vel_lim_cost = -10.0 * x[0] * x[0] + 2.0 * parmas_.velocity.forward;
+    const double rot_lim_cost = -10.0 * x[3] * x[3] + 2.0 * parmas_.velocity.angular;
 
     // do not compute if empty array
     const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_constants_) : 0.0;
-    return 0.5 * (state_cost + control_cost) + map_cost;
+    return 0.5 * (state_cost + control_cost) + map_cost + vel_lim_cost + rot_lim_cost;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
     const VectorStateExt dq = dXF(x, xf);
     const VectorStateExt map_deriv = getCostmapDx(x, rm_, map_constants_);
-    // VectorStateExt ext_cost;
-    // ext_cost.setZero();
-    // ext_cost[0] = 2.0 * 10.0 * x[0];
-    // ext_cost[3] = 2.0 * 10.0 * x[3];
-    return W_ * dq + map_deriv;
+    VectorStateExt ext_cost;
+    ext_cost.setZero();
+    ext_cost[0] = 2.0 * 10.0 * x[0];
+    ext_cost[3] = 2.0 * 10.0 * x[3];
+    return W_ * dq + map_deriv + ext_cost;
   }
 
   inline VectorControl dqDu(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
