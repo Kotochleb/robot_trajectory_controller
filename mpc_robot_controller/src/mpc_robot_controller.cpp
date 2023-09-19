@@ -272,6 +272,9 @@ geometry_msgs::msg::TwistStamped MPCRobotController::computeVelocityCommands(
     recovery_cnt_ = 0;
     twist_mem_ = rhc_->getVelocityCommands(path_depth_);
     last_path_ = path;
+    // remove already used part of the path
+    last_path_.poses.erase(last_path_.poses.begin());
+    
     cmd_vel.twist = twist_mem_[0];
     is_in_recovery_ = false;
   } else {

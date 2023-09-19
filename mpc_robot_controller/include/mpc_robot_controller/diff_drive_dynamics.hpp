@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 
 #include <mpc_robot_controller/robot_dynamics.hpp>
+
 namespace diff_drive_dynamics {
 
 struct DiffDriveParams {
@@ -135,7 +136,7 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     dx[2] = x[0] * sin(x[4]);
     dx[3] = u[1];
     dx[4] = x[3];
-    dx[5] = q(x, xf, u);
+    dx[5] = L(x, xf, u);
     return dx;
   }
 
@@ -147,57 +148,59 @@ struct DiffDriveDynamics : RobotDynamics<DiffDriveDynamics, state_variables, con
     dp[3] = -p[4];
     dp[4] = -x[0] * (-p[1] * sin(x[4]) + p[2] * cos(x[4]));
 
-    dp.head(5).noalias() += dqDx(x, xf_).head(5);
+    dp.head(5).noalias() += dLDx(x, xf_).head(5);
 
     dp[5] = p[0];
     dp[6] = p[3];
 
-    dp.tail(2).noalias() += dqDu(x, xf_, u);
+    dp.tail(2).noalias() -= dLDu(x, xf_, u);
 
     return dp;
   };
 
-  inline double q(const VectorStateExt& x, const VectorStateExt& xf, const VectorControl& u) {
+  inline double q(const VectorStateExt& x, const VectorStateExt& xf) {
 
     const VectorStateExt dx_end = dXF(x, xf);
     const double state_cost = dx_end.transpose() * W_ * dx_end;
-    const double control_cost = u.transpose() * R_ * u;
-
-    // const double vel_lim_cost = -10.0 * x[0] * x[0] + 2.0 * parmas_.velocity.forward;
-    // const double rot_lim_cost = -10.0 * x[3] * x[3] + 2.0 * parmas_.velocity.angular;
-
-    // do not compute if empty array
-    const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_const_) : 0.0;
-    return 0.5 * (state_cost + control_cost) + map_cost;
+    return 0.5 * state_cost;
   }
 
   inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
+
+    const VectorStateExt dx_end = dXF(x, xf);
+    return -1.0 * W_ * dx_end;
+  }
+
+  inline double L(const VectorStateExt& x, const VectorStateExt& /*xf*/, const VectorControl& u) {
+    const double control_cost = u.transpose() * R_ * u;
+
+    // do not compute if empty array
+    const double map_cost = rm_.size() ? getCostmapCost(x, rm_, map_const_) : 0.0;
+    return 0.5 * (control_cost) + map_cost;
+  }
+
+  inline VectorStateExt dLDx(const VectorStateExt& x, const VectorStateExt& /*xf*/) {
     VectorStateExt map_deriv;
     if (rm_.size() > 0) {
       map_deriv = getCostmapDx(x, rm_, map_const_);
     } else {
       map_deriv.setZero();
     }
-    // VectorStateExt ext_cost;
-    // ext_cost.setZero();
-    // ext_cost[0] = 2.0 * 10.0 * x[0];
-    // ext_cost[3] = 2.0 * 10.0 * x[3];
-    const VectorStateExt dq = dXF(x, xf);
-    return W_ * dq + map_deriv;
+    return map_deriv;
   }
 
-  inline VectorControl dqDu(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
+  inline VectorControl dLDu(const VectorStateExt& /*x*/, const VectorStateExt& /*xf*/,
                             const VectorControl& u) {
     const VectorControl dq = u;
     return R_ * dq;
   }
 
   inline double costFun(const MatrixStateExt& x_out, const VectorStateExt& xf,
-                        const MatrixControl& u) {
+                        const MatrixControl& /*u*/) {
 
-    const double target_difference = q(x_out.rightCols<1>(), xf, u);
+    const double target_difference = q(x_out.rightCols<1>(), xf);
     const double state_cost = x_out.bottomRightCorner<1, 1>()(0, 0);
-    return 0.5 * target_difference + state_cost;
+    return target_difference + state_cost;
   };
 
   // auxiliary function to computing minimum angle theta

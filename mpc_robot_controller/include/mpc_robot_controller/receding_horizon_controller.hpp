@@ -67,7 +67,7 @@ class RecidingHorizonController {
   std::shared_ptr<controller_nlp::ControllerConstraint> constraint_;
   std::shared_ptr<controller_nlp::ControllerVariables> variables_;
 
-  const std::set<int> ok_responses_ = {1, 2, 3, 4, 5, -1, -4};
+  const std::set<int> ok_responses_ = {0, 1, 2, 3, 4, 5, -1, -4};
 };
 
 };  // namespace receding_horizon_controller

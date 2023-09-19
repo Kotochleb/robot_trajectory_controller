@@ -66,8 +66,8 @@ void RecidingHorizonController::clearControlMemory() {
 
 void RecidingHorizonController::randomizeControlMemory() {
   u_.setRandom();
-  u_.row(0) *= dynamics_->getLinearAccelerationLimit();
-  u_.row(1) *= dynamics_->getAngularAccelerationLimit();
+  u_.row(0) *= dynamics_->getLinearAccelerationLimit() / 2.0;
+  u_.row(1) *= dynamics_->getAngularAccelerationLimit() / 2.0;
 }
 
 void RecidingHorizonController::resetOptimuizer() {
@@ -79,7 +79,11 @@ void RecidingHorizonController::resetOptimuizer() {
   ipopt_->SetOption("max_iter", max_iter_);
   ipopt_->SetOption("print_level", 0);
   ipopt_->SetOption("max_cpu_time", max_cpu_time_);
-  ipopt_->SetOption("acceptable_tol", 1e-4);
+  // ipopt_->SetOption("acceptable_tol", 1e-4);
+
+
+  // ipopt_->SetOption("derivative_test", "first-order");
+  // ipopt_->SetOption("derivative_test_tol", 1e-4);
 }
 
 void RecidingHorizonController::setWarmStart() {

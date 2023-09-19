@@ -59,7 +59,7 @@ struct RobotDynamics {
     MatrixStateExt x = rk4Ext(u, x0, xf);
 
     VectorPsi psi_f = VectorPsi::Zero();
-    psi_f.head(xf.rows()) = -dqDx(x.col(x.cols() - 1), xf);
+    psi_f.head(xf.rows()) = dqDx(x.rightCols(1), xf);
 
     MatrixPsi psi_out = MatrixPsi(psi_f.rows(), u.cols());
     rk4ExtPsi(x, u, psi_f, psi_out);
@@ -170,8 +170,16 @@ struct RobotDynamics {
     };
   };
 
-  inline double q(const VectorStateExt& x, const VectorStateExt& xf, const VectorControl& u) {
-    return static_cast<Derived*>(this)->q(x, xf, u);
+  inline VectorStateExt q(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->q(x, xf);
+  };
+
+  inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->dqDx(x, xf);
+  };
+
+  inline double L(const VectorStateExt& x, const VectorStateExt& xf, const VectorControl& u) {
+    return static_cast<Derived*>(this)->L(x, xf, u);
   };
 
   inline VectorStateExt getDX(const VectorStateExt& x, const VectorStateExt& xf,
@@ -189,8 +197,13 @@ struct RobotDynamics {
     return static_cast<Derived*>(this)->costFun(x_out, xf, u);
   };
 
-  inline VectorStateExt dqDx(const VectorStateExt& x, const VectorStateExt& xf) {
-    return static_cast<Derived*>(this)->dqDx(x, xf);
+  inline VectorStateExt dLDx(const VectorStateExt& x, const VectorStateExt& xf) {
+    return static_cast<Derived*>(this)->dLDx(x, xf);
+  };
+
+  inline VectorStateExt dLDu(const VectorStateExt& x, const VectorStateExt& xf,
+                             const VectorControl& u) {
+    return static_cast<Derived*>(this)->dLDu(x, xf, u);
   };
 };
 
