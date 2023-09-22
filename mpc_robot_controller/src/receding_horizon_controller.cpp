@@ -77,7 +77,7 @@ void RecidingHorizonController::resetOptimuizer() {
   ipopt_ = std::make_unique<ifopt::IpoptSolver>();
 
   ipopt_->SetOption("max_iter", max_iter_);
-  ipopt_->SetOption("print_level", 0);
+  ipopt_->SetOption("print_level", 4);
   ipopt_->SetOption("max_cpu_time", max_cpu_time_);
   // ipopt_->SetOption("acceptable_tol", 1e-4);
 
@@ -88,12 +88,12 @@ void RecidingHorizonController::resetOptimuizer() {
 
 void RecidingHorizonController::setWarmStart() {
   ipopt_->SetOption("warm_start_init_point", "yes");
-  ipopt_->SetOption("warm_start_bound_push", 1e-12);
-  ipopt_->SetOption("warm_start_mult_bound_push", 1e-12);
-  ipopt_->SetOption("warm_start_bound_frac", 1e-12);
-  ipopt_->SetOption("warm_start_slack_bound_frac", 1e-12);
-  ipopt_->SetOption("warm_start_slack_bound_push", 1e-12);
-  ipopt_->SetOption("mu_init", 1e-6);
+  ipopt_->SetOption("warm_start_bound_push", 1e-16);
+  ipopt_->SetOption("warm_start_mult_bound_push", 1e-16);
+  ipopt_->SetOption("warm_start_bound_frac", 1e-16);
+  ipopt_->SetOption("warm_start_slack_bound_frac", 1e-16);
+  ipopt_->SetOption("warm_start_slack_bound_push", 1e-16);
+  ipopt_->SetOption("mu_init", 1e-9);
 }
 
 void RecidingHorizonController::setColdStart() {
